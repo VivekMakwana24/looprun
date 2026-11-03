@@ -67,8 +67,15 @@ def make_resources(settings: Settings) -> Resources:
 async def ensure_indexes(db: Any) -> None:
     await db.users.create_index("google_sub", unique=True)
     await db.runs.create_index("user_id")
+    await db.run_fixes.create_index("user_id")
+    # Raw GPS: documents with an `expire_at` date are deleted by Mongo's TTL monitor at that time.
+    await db.run_fixes.create_index("expire_at", expireAfterSeconds=0)
+    await db.run_claims.create_index("user_id")
     await db.cell_power.create_index([("cell", 1), ("user_id", 1)], unique=True)
     await db.cell_power.create_index("user_id")
     await db.cells.create_index([("lat", 1), ("lng", 1)])
     await db.cells.create_index("owner_id")
-    await db.reports.create_index("created_at")
+    await db.cells.create_index("public_owner_id")
+    await db.cells.create_index("pending_owner_id")
+    await db.reports.create_index("expire_at", expireAfterSeconds=0)
+    await db.reports.create_index("reporter_id")

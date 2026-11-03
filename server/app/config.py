@@ -28,34 +28,51 @@ class Settings(BaseSettings):
     dev_auth: bool = Field(False, validation_alias=AliasChoices("LOOPRUN_DEV_AUTH"))  # accepts id_token "dev:<name>"
     jwt_secret: str = Field(DEFAULT_JWT_SECRET, validation_alias=AliasChoices("LOOPRUN_JWT_SECRET"))
     jwt_ttl_seconds: int = 30 * 24 * 3600
+    jwt_min_secret_length: int = 32  # production (dev auth off) refuses shorter secrets
     google_client_id: str = Field("", validation_alias=AliasChoices("LOOPRUN_GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_ID"))
 
     # --- uploads ---
-    max_fixes: int = 20000  # more -> HTTP 413
-    max_body_bytes: int = 8 * 1024 * 1024  # bigger Content-Length -> HTTP 413
+    max_fixes: int = Field(20000, ge=1)  # more -> HTTP 413
+    max_body_bytes: int = Field(8 * 1024 * 1024, ge=1)  # larger request body (declared or streamed) -> HTTP 413
     run_rate_limit: int = Field(
         30, validation_alias=AliasChoices("LOOPRUN_RUN_RATE_LIMIT")
     )  # uploads per user per window
     run_rate_window_seconds: int = 3600
-    keep_fixes_for_review: bool = True  # raw GPS is kept only for runs that need a human look; else it is dropped
 
     # --- map / privacy ---
     # Delayed publishing: a change of cell owner becomes visible to other people (GET /cells and the
     # WebSocket) only after this many seconds. 0 in tests.
     publish_delay_seconds: int = Field(
-        1800, validation_alias=AliasChoices("LOOPRUN_PUBLISH_DELAY_SECONDS", "PUBLISH_DELAY_SECONDS")
+        1800, ge=0, validation_alias=AliasChoices("LOOPRUN_PUBLISH_DELAY_SECONDS", "PUBLISH_DELAY_SECONDS")
     )
     # K-anonymity for owner names: a cell shows its owner only when at least K distinct users have power
     # in cells within grid_disk(cell, privacy_radius_k_ring). Otherwise owner=null, hidden=true.
-    privacy_min_users: int = Field(3, validation_alias=AliasChoices("LOOPRUN_PRIVACY_K", "PRIVACY_MIN_USERS"))
-    privacy_ring: int = 3  # the "k=3" of grid_disk(k=3)
+    privacy_min_users: int = Field(3, ge=1, validation_alias=AliasChoices("LOOPRUN_PRIVACY_K", "PRIVACY_MIN_USERS"))
+    privacy_ring: int = Field(3, ge=0)  # the "k=3" of grid_disk(k=3)
     bbox_max_degrees: float = 0.2
     cells_max_results: int = 20000
     leaderboard_cache_seconds: int = 60
     leaderboard_size: int = 100
 
-    # --- processing ---
-    processing_lock_seconds: int = 120
+    # --- processing / locks ---
+    processing_lock_seconds: int = Field(30, ge=2)  # claims-lock TTL; extended while the holder is alive
+    processing_lock_wait_seconds: float = Field(
+        60.0, ge=0
+    )  # worker waits this long for the lock, then retries the task
+    delete_lock_wait_seconds: float = Field(10.0, ge=0)  # DELETE /me waits this long, then answers 503 (safe to retry)
+
+    # --- retention (TTL indexes) ---
+    fixes_retention_days: int = Field(30, ge=1)  # raw GPS of runs that are not accepted (accepted: deleted at once)
+    reports_retention_days: int = Field(180, ge=1)
+
+    # --- freeze ---
+    max_freeze_days: int = Field(30, ge=1, le=30)  # one freeze
+    freeze_quota_days: int = Field(30, ge=1)  # at most this many frozen days ...
+    freeze_window_days: int = Field(90, ge=1)  # ... in any rolling window of this many days
+
+    # --- websocket ---
+    ws_recheck_seconds: float = Field(30.0, gt=0)  # re-check that the user still exists
+    ws_auth_timeout_seconds: float = Field(10.0, gt=0)  # first-message auth must arrive within this
 
 
 @lru_cache

@@ -6,10 +6,13 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from . import api, live
+from . import engine_adapter as eng
 from .auth import GoogleVerifier, google_verify
+from .bodylimit import BodyLimitMiddleware
 from .config import DEFAULT_JWT_SECRET, Settings, get_settings
 from .logging_config import setup_logging
 from .resources import Resources, ensure_indexes, make_resources
@@ -25,10 +28,15 @@ def create_app(
 ) -> FastAPI:
     settings = settings or get_settings()
     setup_logging(settings.log_level)
+    eng.validate_config()
+    if not settings.dev_auth and (
+        settings.jwt_secret == DEFAULT_JWT_SECRET or len(settings.jwt_secret) < settings.jwt_min_secret_length
+    ):
+        raise RuntimeError(f"LOOPRUN_JWT_SECRET must be set to at least {settings.jwt_min_secret_length} characters")
     if settings.jwt_secret == DEFAULT_JWT_SECRET:
-        if not settings.dev_auth:
-            raise RuntimeError("LOOPRUN_JWT_SECRET must be set (dev auth is off)")
         log.warning("using the default JWT secret; fine for development only")
+    if settings.dev_auth and settings.google_client_id:
+        log.warning("LOOPRUN_DEV_AUTH is on although a Google client id is set: never run this in production")
     configure_celery(settings)
     res = resources or make_resources(settings)
 
@@ -42,12 +50,13 @@ def create_app(
     app.state.res = res
     app.state.google_verifier = google_verifier or google_verify
 
-    @app.middleware("http")
-    async def limit_body(request: Request, call_next):
-        cl = request.headers.get("content-length")
-        if cl and cl.isdigit() and int(cl) > settings.max_body_bytes:
-            return JSONResponse({"detail": "Payload too large"}, status_code=413)
-        return await call_next(request)
+    app.add_middleware(BodyLimitMiddleware, max_bytes=settings.max_body_bytes)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        # Never echo the rejected input: it can be NaN/Infinity, which JSON cannot carry (that was a 500).
+        detail = [{"loc": [str(x) for x in e["loc"]], "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
+        return JSONResponse({"detail": detail}, status_code=422)
 
     @app.get("/healthz")
     @app.get("/v1/healthz")

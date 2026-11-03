@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
+MAX_MS = 4_102_444_800_000  # year 2100: keeps every integer far inside int64
+
 
 class UserRef(BaseModel):
     id: str
@@ -23,17 +25,17 @@ class GoogleAuthRequest(BaseModel):
 
 
 class FixIn(BaseModel):
-    lat: float = Field(ge=-90, le=90)
-    lng: float = Field(ge=-180, le=180)
-    t: int = Field(ge=0)
-    acc: float = Field(ge=0, le=100000)
+    lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    lng: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    t: int = Field(ge=0, le=MAX_MS)
+    acc: float = Field(ge=0, le=100000, allow_inf_nan=False)
     mock: bool = False
 
 
 class RunUpload(BaseModel):
     id: UUID
-    started_at: int = Field(ge=0)
-    ended_at: int = Field(ge=0)
+    started_at: int = Field(ge=0, le=MAX_MS)
+    ended_at: int = Field(ge=0, le=MAX_MS)
     integrity_token: str | None = Field(default=None, max_length=16384)
     # No max_length here on purpose: too many fixes must be HTTP 413, not 422 (checked in the route).
     fixes: list[FixIn]
@@ -69,6 +71,8 @@ class RunStatus(BaseModel):
 
 class CellOut(BaseModel):
     id: str
+    lat: float
+    lng: float
     owner: UserRef | None = None
     mine: bool = False
     hidden: bool = False
@@ -90,9 +94,9 @@ class LeaderboardResponse(BaseModel):
 
 
 class HomeZone(BaseModel):
-    lat: float = Field(ge=-90, le=90)
-    lng: float = Field(ge=-180, le=180)
-    radius_m: float = Field(ge=50, le=1000)
+    lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    lng: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    radius_m: float = Field(ge=50, le=1000, allow_inf_nan=False)
 
 
 class HomeZonesRequest(BaseModel):

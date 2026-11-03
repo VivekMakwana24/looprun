@@ -13,8 +13,9 @@ from pymongo.errors import DuplicateKeyError
 
 from . import auth
 from .cellview import build_views
-from .events import iso_week, leaderboard_key, publish_changes
-from .freeze import settle_freeze
+from .errors import LockTimeout
+from .events import iso_week, leaderboard_key
+from .freeze import quota_ok, rebase_for_freeze, settle_freeze
 from .models import (
     CellsResponse,
     FreezeRequest,
@@ -28,7 +29,7 @@ from .models import (
     Session,
     UserRef,
 )
-from .processing import reassign_after_delete
+from .processing import delete_account, expiry
 from .resources import Resources
 from .worker import enqueue_run
 
@@ -91,7 +92,7 @@ async def upload_run(
 ) -> RunStatus:
     s = res.settings
     run_id = str(body.id)
-    existing = await res.db.runs.find_one({"_id": run_id}, {"fixes": 0})
+    existing = await res.db.runs.find_one({"_id": run_id})
     if existing is not None:
         if existing["user_id"] != user["_id"]:
             raise HTTPException(409, "Run id already used")
@@ -111,7 +112,6 @@ async def upload_run(
         "integrity_token": body.integrity_token,
         "integrity_verdict": "unchecked",  # v1: stored, not verified, never blocks
         "fix_count": len(body.fixes),
-        "fixes": [[f.lat, f.lng, f.t, f.acc, f.mock] for f in body.fixes],
         "status": "processing",
         "cells_claimed": 0,
         "cells_taken_from_others": 0,
@@ -121,17 +121,27 @@ async def upload_run(
     try:
         await res.db.runs.insert_one(doc)
     except DuplicateKeyError:
-        again = await res.db.runs.find_one({"_id": run_id}, {"fixes": 0})
+        again = await res.db.runs.find_one({"_id": run_id})
         if again is None or again["user_id"] != user["_id"]:
             raise HTTPException(409, "Run id already used") from None
         return run_status(again)
     try:
+        await res.db.run_fixes.insert_one(
+            {
+                "_id": run_id,
+                "user_id": user["_id"],
+                "fixes": [[f.lat, f.lng, f.t, f.acc, f.mock] for f in body.fixes],
+                # even a run stuck in `processing` must not keep raw GPS forever
+                "expire_at": expiry(res, s.fixes_retention_days),
+            }
+        )
         await asyncio.to_thread(enqueue_run, run_id)
     except Exception:
         log.exception("enqueue_failed", extra={"run_id": run_id})
+        await res.db.run_fixes.delete_one({"_id": run_id})
         await res.db.runs.delete_one({"_id": run_id})  # let the client retry with the same id
         raise HTTPException(503, "Queue unavailable") from None
-    current = await res.db.runs.find_one({"_id": run_id}, {"fixes": 0})
+    current = await res.db.runs.find_one({"_id": run_id})
     return run_status(current or doc)
 
 
@@ -139,7 +149,7 @@ async def upload_run(
 async def get_run(
     run_id: UUID, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
 ) -> RunStatus:
-    doc = await res.db.runs.find_one({"_id": str(run_id), "user_id": user["_id"]}, {"fixes": 0})
+    doc = await res.db.runs.find_one({"_id": str(run_id), "user_id": user["_id"]})
     if doc is None:
         raise HTTPException(404, "Unknown run")
     return run_status(doc)
@@ -160,22 +170,44 @@ async def get_cells(
     return CellsResponse(cells=await build_views(res, docs, user["_id"]))
 
 
+async def _public_counts(res: Resources, now: int) -> dict[str, int]:
+    """Cells per user counting only ownership that is already published (same delay as GET /cells for others)."""
+    cutoff = now - res.settings.publish_delay_seconds * 1000
+    counts: dict[str, int] = {}
+
+    async def add(match: dict, field: str) -> None:
+        pipeline = [{"$match": match}, {"$group": {"_id": f"${field}", "n": {"$sum": 1}}}]
+        async for r in res.db.cells.aggregate(pipeline):
+            if r["_id"] is not None:
+                counts[r["_id"]] = counts.get(r["_id"], 0) + r["n"]
+
+    await add({"pending": True, "pending_at": {"$lte": cutoff}}, "pending_owner_id")  # change already revealed
+    await add({"pending": {"$ne": True}, "public_owner_id": {"$ne": None}}, "public_owner_id")  # nothing pending
+    await add({"pending": True, "pending_at": {"$gt": cutoff}, "public_owner_id": {"$ne": None}}, "public_owner_id")
+    return counts
+
+
 @router.get("/leaderboard/weekly", response_model=LeaderboardResponse)
 async def leaderboard(
     user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
 ) -> LeaderboardResponse:
     s = res.settings
-    week = iso_week(res.clock())
+    now = res.clock()
+    week = iso_week(now)
     key = leaderboard_key(week)
+    counts: dict[str, int] | None = None
     if s.leaderboard_cache_seconds > 0:
         cached = await res.redis.get(key)
         if cached:
-            return LeaderboardResponse(**json.loads(cached))
-    excluded = [
-        r["_id"] async for r in res.db.runs.find({"leaderboard_excluded": True, "review": "awaiting"}, {"_id": 1})
-    ]
-    pipeline = [{"$match": {"owner_run_id": {"$nin": excluded}}}, {"$group": {"_id": "$owner_id", "n": {"$sum": 1}}}]
-    counts = {r["_id"]: r["n"] async for r in res.db.cells.aggregate(pipeline)}
+            counts = json.loads(cached)
+    if counts is None:
+        counts = await _public_counts(res, now)
+        if s.leaderboard_cache_seconds > 0:
+            await res.redis.set(key, json.dumps(counts), ex=s.leaderboard_cache_seconds)
+    # Everybody sees only published ownership; the viewer additionally sees their own entry at once.
+    own = await res.db.cells.count_documents({"owner_id": user["_id"]})
+    counts = {**counts, user["_id"]: own}
+    counts = {uid: n for uid, n in counts.items() if n > 0}
     users = {u["_id"]: u async for u in res.db.users.find({"_id": {"$in": sorted(counts)}})}
     rows = sorted(
         ((n, users[uid]["name"], uid) for uid, n in counts.items() if uid in users), key=lambda r: (-r[0], r[1], r[2])
@@ -184,10 +216,7 @@ async def leaderboard(
         {"rank": i + 1, "user": {"id": uid, "name": name}, "cells": n}
         for i, (n, name, uid) in enumerate(rows[: s.leaderboard_size])
     ]
-    out = {"week": week, "entries": entries}
-    if s.leaderboard_cache_seconds > 0:
-        await res.redis.set(key, json.dumps(out), ex=s.leaderboard_cache_seconds)
-    return LeaderboardResponse(**out)
+    return LeaderboardResponse(week=week, entries=entries)
 
 
 # ---------------------------------------------------------------- me
@@ -204,25 +233,32 @@ async def put_home_zones(
 async def freeze(
     body: FreezeRequest, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
 ) -> FreezeResponse:
+    s = res.settings
+    if body.days > s.max_freeze_days:
+        raise HTTPException(422, f"A freeze lasts at most {s.max_freeze_days} days")
     now = res.clock()
-    fresh = await res.db.users.find_one({"_id": user["_id"]})
-    if fresh and fresh.get("freeze_until"):
-        await settle_freeze(res.db, fresh, min(now, fresh["freeze_until"]))  # end the old freeze, forgive paused time
-    until = now + body.days * DAY_MS if body.days > 0 else None
-    if until:
-        await res.db.users.update_one({"_id": user["_id"]}, {"$set": {"freeze_until": until, "freeze_started_at": now}})
+    fresh = await res.db.users.find_one({"_id": user["_id"]}) or user
+    if fresh.get("freeze_until"):  # end the running (or expired) freeze first: forgive the paused time
+        await settle_freeze(res.db, fresh, min(now, fresh["freeze_until"]))
+    if body.days == 0:
+        return FreezeResponse(freeze_until=None)
+    if not quota_ok(fresh.get("freeze_log", []), now, body.days, s.freeze_quota_days, s.freeze_window_days):
+        raise HTTPException(409, f"At most {s.freeze_quota_days} frozen days in any {s.freeze_window_days} days")
+    await rebase_for_freeze(res.db, user["_id"], now)  # decay that already happened stays
+    until = now + body.days * DAY_MS
+    await res.db.users.update_one({"_id": user["_id"]}, {"$set": {"freeze_until": until, "freeze_started_at": now}})
     return FreezeResponse(freeze_until=until)
 
 
 @router.delete("/me", status_code=204)
-async def delete_me(user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)) -> Response:
-    uid = user["_id"]
-    await res.db.users.delete_one({"_id": uid})
-    await res.db.runs.delete_many({"user_id": uid})
-    await res.db.reports.delete_many({"reporter_id": uid})
-    changes = await reassign_after_delete(res, uid)  # also deletes cell_power
-    await publish_changes(res.redis, changes)
-    log.info("account_deleted", extra={"cells_reassigned": len(changes)})
+async def delete_me(
+    user: dict = Depends(auth.current_user_even_if_deleting), res: Resources = Depends(auth.get_res)
+) -> Response:
+    try:
+        await delete_account(res, user["_id"])
+    except LockTimeout:
+        # The account stays in `deleting` (no uploads, no claims); calling DELETE /me again finishes the job.
+        raise HTTPException(503, "Busy, retry", headers={"Retry-After": "5"}) from None
     return Response(status_code=204)
 
 

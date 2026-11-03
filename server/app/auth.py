@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import threading
 import time
 import uuid
 from collections.abc import Callable
@@ -19,7 +20,7 @@ from .resources import Resources
 
 log = logging.getLogger("looprun.auth")
 _bearer = HTTPBearer(auto_error=False)
-DEV_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,40}$")
+DEV_NAME = re.compile(r"[A-Za-z0-9_.-]{1,40}")  # used with fullmatch: "$" would accept a trailing newline
 
 
 def create_token(res: Resources, user_id: str) -> str:
@@ -43,12 +44,46 @@ def decode_token(res: Resources, token: str) -> str | None:
     return sub if isinstance(sub, str) else None
 
 
+class _CachedResponse:
+    def __init__(self, status: int, data: bytes, headers: Any):
+        self.status, self.data, self.headers = status, data, headers
+
+
+class CachingRequest:
+    """google-auth transport that caches Google's public certificates so a sign-in does not refetch them."""
+
+    def __init__(self, inner: Any = None, ttl_s: float = 3600.0, clock: Callable[[], float] = time.monotonic):
+        self._inner, self._ttl, self._clock = inner, ttl_s, clock
+        self._cache: dict[str, tuple[float, _CachedResponse]] = {}
+        self._lock = threading.Lock()
+
+    def __call__(
+        self, url: str, method: str = "GET", body: Any = None, headers: Any = None, timeout: Any = 120, **kw: Any
+    ):
+        with self._lock:
+            hit = self._cache.get(url)
+            if method == "GET" and hit and self._clock() - hit[0] < self._ttl:
+                return hit[1]
+        if self._inner is None:
+            from google.auth.transport import requests as g_requests  # noqa: PLC0415
+
+            self._inner = g_requests.Request()
+        r = self._inner(url, method=method, body=body, headers=headers, timeout=timeout, **kw)
+        if method == "GET" and r.status == 200:
+            with self._lock:
+                self._cache[url] = (self._clock(), _CachedResponse(r.status, r.data, r.headers))
+        return r
+
+
+_cert_request = CachingRequest()
+CLOCK_SKEW_S = 10
+
+
 def google_verify(token: str, client_id: str) -> dict:
-    """Verify a Google ID token (signature, expiry, audience). Blocking: call in a thread."""
-    from google.auth.transport import requests as g_requests  # noqa: PLC0415
+    """Verify a Google ID token (signature, expiry, audience, issuer). Blocking: call in a thread."""
     from google.oauth2 import id_token as g_id_token  # noqa: PLC0415
 
-    return g_id_token.verify_oauth2_token(token, g_requests.Request(), client_id)
+    return g_id_token.verify_oauth2_token(token, _cert_request, client_id, clock_skew_in_seconds=CLOCK_SKEW_S)
 
 
 GoogleVerifier = Callable[[str, str], dict]
@@ -59,7 +94,7 @@ async def identify(res: Resources, verifier: GoogleVerifier, id_token: str) -> t
     s = res.settings
     if s.dev_auth and id_token.startswith("dev:"):
         name = id_token[4:]
-        if not DEV_NAME.match(name):
+        if not DEV_NAME.fullmatch(name):
             raise HTTPException(401, "Invalid token")
         return f"dev:{name}", name
     if not s.google_client_id:
@@ -101,9 +136,7 @@ def get_res(request: Request) -> Resources:
     return request.app.state.res
 
 
-async def current_user(
-    creds: HTTPAuthorizationCredentials | None = Depends(_bearer), res: Resources = Depends(get_res)
-) -> dict:
+async def _user_from_bearer(creds: HTTPAuthorizationCredentials | None, res: Resources) -> dict:
     if creds is None:
         raise HTTPException(401, "Missing token", headers={"WWW-Authenticate": "Bearer"})
     user_id = decode_token(res, creds.credentials)
@@ -111,3 +144,19 @@ async def current_user(
     if user is None:
         raise HTTPException(401, "Invalid token", headers={"WWW-Authenticate": "Bearer"})
     return user
+
+
+async def current_user(
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer), res: Resources = Depends(get_res)
+) -> dict:
+    user = await _user_from_bearer(creds, res)
+    if user.get("deleting"):
+        raise HTTPException(403, "Account deletion in progress")
+    return user
+
+
+async def current_user_even_if_deleting(
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer), res: Resources = Depends(get_res)
+) -> dict:
+    """Only DELETE /me uses this: a half-deleted account must still be able to finish deleting itself."""
+    return await _user_from_bearer(creds, res)

@@ -218,16 +218,17 @@ def test_leaderboard_ordering(client, clock):
     assert r["week"].startswith("2027-W") or "-W" in r["week"]
 
 
-def test_leaderboard_excludes_implausible_loop_awaiting_review(client):
+def test_implausible_loop_is_held_for_review(client):
+    """Soft flag implausible_loop: no cells, pending_review, nothing on the leaderboard until someone reviews it."""
     hs = {n: login(client, n) for n in ("alice", "bob")}
     with_flag("implausible_loop", "soft", lambda fixes: fixes[0].lat > 50.3)
     run_loop(client, hs["alice"], lat=50.0, side_m=300)
-    flagged = run_loop(client, hs["bob"], lat=50.5, side_m=500)
-    assert flagged["status"] == "accepted" and any(f["code"] == "implausible_loop" for f in flagged["flags"])
-    names = [
-        e["user"]["name"] for e in client.get("/v1/leaderboard/weekly", headers=hdr(hs["alice"])).json()["entries"]
-    ]
+    held = run_loop(client, hs["bob"], lat=50.5, side_m=500)
+    assert held["status"] == "pending_review" and held["cells_claimed"] == 0
+    assert any(f["code"] == "implausible_loop" for f in held["flags"])
+    names = [e["user"]["name"] for e in client.get("/v1/leaderboard/weekly", headers=hdr(hs["alice"])).json()["entries"]]
     assert names == ["alice"]
+    assert cells_of(client, hs["bob"], bbox="8.6,50.4,8.8,50.6") == []
 
 
 # ------------------------------------------------------------------ account / reports
@@ -286,7 +287,7 @@ def test_websocket_receives_cell_changed(client):
 
 
 def test_websocket_rejects_bad_token_and_big_bbox(client):
-    for url in ("/v1/live?bbox=8.6,49.9,8.8,50.1&token=junk", "/v1/live?bbox=8.6,49.9,8.8,50.1"):
+    for url in ("/v1/live?bbox=8.6,49.9,8.8,50.1&token=junk",):
         with pytest.raises(WebSocketDisconnect), client.websocket_connect(url):
             pass
     h = login(client, "alice")

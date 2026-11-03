@@ -17,12 +17,11 @@ def public_owner(doc: dict, now: int, delay_ms: int) -> str | None:
     return doc.get("public_owner_id")
 
 
-def change_fields(doc: dict | None, new_owner: str, now: int, delay_ms: int, run_id: str | None) -> dict:
+def change_fields(doc: dict | None, new_owner: str, now: int, delay_ms: int) -> dict:
     """$set fields for an ownership change: first fold an already-revealed pending change into `public`."""
     public = public_owner(doc, now, delay_ms) if doc else None
     return {
         "owner_id": new_owner,
-        "owner_run_id": run_id,
         "public_owner_id": public,
         "pending": True,
         "pending_owner_id": new_owner,
@@ -41,6 +40,13 @@ async def _users_in_neighbourhoods(db: Any, cells: list[str], ring: int) -> dict
         async for d in db.cell_power.find({"cell": {"$in": part}}, {"cell": 1, "user_id": 1}):
             by_cell.setdefault(d["cell"], set()).add(d["user_id"])
     return {c: set().union(*(by_cell.get(n, set()) for n in ns)) for c, ns in neigh.items()}
+
+
+def _cell(doc: dict, owner: dict | None, mine: bool, hidden: bool) -> dict:
+    lat, lng = doc.get("lat"), doc.get("lng")
+    if lat is None or lng is None:
+        lat, lng = eng.cell_centre(doc["_id"])
+    return {"id": doc["_id"], "lat": lat, "lng": lng, "owner": owner, "mine": mine, "hidden": hidden}
 
 
 async def build_views(res: Resources, docs: list[dict], viewer_id: str | None) -> list[dict]:
@@ -74,16 +80,9 @@ async def build_views(res: Resources, docs: list[dict], viewer_id: str | None) -
         if user is None:  # owner vanished (should not happen); never show a ghost
             continue
         if owner == viewer_id:
-            out.append({"id": cid, "owner": {"id": owner, "name": user["name"]}, "mine": True, "hidden": False})
+            out.append(_cell(d, {"id": owner, "name": user["name"]}, True, False))
             continue
         zones = [(z["lat"], z["lng"], z["radius_m"]) for z in user.get("home_zones", [])]
         hidden = eng.in_home_zone(cid, zones) or len(neighbours.get(cid, ())) < s.privacy_min_users
-        out.append(
-            {
-                "id": cid,
-                "owner": None if hidden else {"id": owner, "name": user["name"]},
-                "mine": False,
-                "hidden": hidden,
-            }
-        )
+        out.append(_cell(d, None if hidden else {"id": owner, "name": user["name"]}, False, hidden))
     return out

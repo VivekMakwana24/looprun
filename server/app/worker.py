@@ -14,6 +14,7 @@ from typing import Any
 from celery import Celery
 
 from .config import Settings, get_settings
+from .errors import RETRYABLE
 from .logging_config import setup_logging
 from .resources import make_resources
 
@@ -58,22 +59,30 @@ def run_sync(coro: Any) -> Any:
         return ex.submit(asyncio.run, coro).result()
 
 
-async def _process(run_id: str) -> None:
+async def _process(run_id: str, final: bool) -> None:
     from .processing import process_run_by_id  # noqa: PLC0415
 
     res = make_resources(_current_settings())
     try:
-        await process_run_by_id(res, run_id)
+        await process_run_by_id(res, run_id, final=final)
     finally:
         await res.close()
 
 
 @celery_app.task(
-    name="looprun.process_run", bind=True, autoretry_for=(OSError, TimeoutError), retry_backoff=True, max_retries=5
+    name="looprun.process_run",
+    bind=True,
+    autoretry_for=RETRYABLE,
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=6,
 )
 def process_run(self: Any, run_id: str) -> None:
+    """Retries Mongo/Redis connection trouble with backoff; on the last attempt the run is marked rejected
+    (processing_error) instead of staying `processing` forever."""
     setup_logging(_current_settings().log_level)
-    run_sync(_process(run_id))
+    run_sync(_process(run_id, final=self.request.retries >= self.max_retries))
 
 
 def enqueue_run(run_id: str) -> None:

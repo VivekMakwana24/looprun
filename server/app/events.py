@@ -28,5 +28,10 @@ async def publish_changes(redis: Any, changes: list[dict]) -> None:
     await pipe.execute()
 
 
+async def publish_user_deleted(redis: Any, user_id: str) -> None:
+    """Tells every open WebSocket to drop that user's connection."""
+    await redis.publish(CHANNEL, json.dumps({"user_deleted": user_id}))
+
+
 async def invalidate_leaderboard(redis: Any, now_ms: int) -> None:
     await redis.delete(leaderboard_key(iso_week(now_ms)))

@@ -193,4 +193,28 @@ def with_flag(code: str, severity: str, when):
     engine_adapter.set_engine(Wrapped())
 
 
+def with_result(when, **changes):
+    """Wrap the active engine so that process_run(fixes) returns the real result with some fields replaced."""
+    inner = ENGINE
+
+    class Wrapped:
+        def __getattr__(self, name):
+            return getattr(inner, name)
+
+        def process_run(self, fixes, *a, **k):
+            r = inner.process_run(fixes, *a, **k)
+            if not when(fixes):
+                return r
+            d = dict(distance_m=r.distance_m, moving_seconds=r.moving_seconds, loops=r.loops, cells=r.cells, flags=r.flags)
+            d.update(changes)
+            return types.SimpleNamespace(**d)
+
+    engine_adapter.set_engine(Wrapped())
+
+
+def lenient(client):
+    """A client that returns 500 responses instead of re-raising server exceptions."""
+    return TestClient(client.app, raise_server_exceptions=False)
+
+
 __all__ = ["dataclasses"]

@@ -13,6 +13,9 @@ import h3
 
 _engine: Any = None
 
+# Soft engine flags that the server treats as 'hold until a human has looked' (decision: implausible loops).
+HOLD_SOFT_CODES = frozenset({"implausible_loop"})
+
 
 def set_engine(module: Any | None) -> None:
     """Inject an engine implementation (module-like object with the ENGINE_SPEC API). None resets."""
@@ -38,12 +41,13 @@ class ProcessedRun:
     cells: list[str] = field(default_factory=list)
 
     @property
-    def has_hard_flag(self) -> bool:
-        return any(f["severity"] == "hard" for f in self.flags)
+    def on_hold(self) -> bool:
+        """Hard flags, and the soft flags in HOLD_SOFT_CODES, hold the run for review: no cells, pending_review."""
+        return any(f["severity"] == "hard" or f["code"] in HOLD_SOFT_CODES for f in self.flags)
 
     @property
     def status(self) -> str:
-        return "pending_review" if self.has_hard_flag else "accepted"
+        return "pending_review" if self.on_hold else "accepted"
 
 
 def process_run(fixes: list[list]) -> ProcessedRun:
@@ -51,14 +55,14 @@ def process_run(fixes: list[list]) -> ProcessedRun:
     e = engine()
     result = e.process_run([e.Fix(lat=f[0], lng=f[1], t=int(f[2]), acc=float(f[3]), mock=bool(f[4])) for f in fixes])
     flags = [{"code": f.code, "severity": f.severity, "detail": f.detail} for f in result.flags]
-    hard = any(f["severity"] == "hard" for f in flags)
+    hold = any(f["severity"] == "hard" or f["code"] in HOLD_SOFT_CODES for f in flags)
     return ProcessedRun(
         distance_m=float(result.distance_m),
         moving_seconds=int(result.moving_seconds),
         loops=[{"cells": len(lp.cells), "area_km2": float(lp.area_km2)} for lp in result.loops],
         flags=flags,
-        # Hard flags award no cells, whatever the engine returned.
-        cells=[] if hard else sorted(set(result.cells)),
+        # Held runs award no cells, whatever the engine returned.
+        cells=[] if hold else sorted(set(result.cells)),
     )
 
 
@@ -111,3 +115,31 @@ def in_home_zone(cell: str, zones: list[tuple[float, float, float]]) -> bool:
 
 def grid_disk(cell: str, k: int) -> list[str]:
     return list(h3.grid_disk(cell, k))
+
+
+def grace_days() -> float:
+    return float(engine().Config().grace_days)
+
+
+def validate_config() -> None:
+    """Refuse to start with nonsense engine tunables (the engine does not guard against them)."""
+    cfg = engine().Config()
+    positive = [
+        "halflife_days",
+        "max_acc_m",
+        "max_loop_perimeter_km",
+        "max_jump_speed_ms",
+        "max_sustained_speed_ms",
+        "sustained_window_s",
+        "effort_cap_minutes",
+        "closure_tol_m",
+    ]
+    non_negative = ["grace_days", "min_loop_area_km2"]
+    bad = [f"{n}={getattr(cfg, n)!r} must be > 0" for n in positive if hasattr(cfg, n) and not getattr(cfg, n) > 0]
+    bad += [
+        f"{n}={getattr(cfg, n)!r} must be >= 0" for n in non_negative if hasattr(cfg, n) and not getattr(cfg, n) >= 0
+    ]
+    if hasattr(cfg, "h3_res") and not 0 <= cfg.h3_res <= 15:
+        bad.append(f"h3_res={cfg.h3_res!r} must be 0..15")
+    if bad:
+        raise ValueError("invalid engine Config: " + "; ".join(bad))
