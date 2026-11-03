@@ -13,6 +13,9 @@ x-server: &server
   environment: &server-env
     LOOPRUN_MONGO_URL: mongodb://looprun:${MONGO_PASSWORD:?set MONGO_PASSWORD in /opt/looprun/.env}@mongo:27017/looprun?authSource=admin
     LOOPRUN_REDIS_URL: redis://redis:6379/0
+    LOOPRUN_JWT_SECRET: ${LOOPRUN_JWT_SECRET:?set LOOPRUN_JWT_SECRET in /opt/looprun/.env}
+    LOOPRUN_GOOGLE_CLIENT_ID: ${LOOPRUN_GOOGLE_CLIENT_ID:?set LOOPRUN_GOOGLE_CLIENT_ID in /opt/looprun/.env}
+    LOOPRUN_DEV_AUTH: "0"
   restart: unless-stopped
   depends_on:
     redis: {condition: service_healthy}

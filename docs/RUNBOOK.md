@@ -15,8 +15,8 @@ Status of this document: written without access to a running host or Docker daem
    sudo REPO_URL=https://github.com/<you>/looprun.git bash setup.sh
    ```
    For a private repo, create a read-only deploy key on the host (`ssh-keygen -t ed25519`), add the public half under the repo's Settings > Deploy keys, and use the `git@github.com:<you>/looprun.git` URL.
-5. Edit `/opt/looprun/.env` (replace every `CHANGE_ME`).
-6. Add the GitHub Actions deploy key (section 8) to `~/.ssh/authorized_keys` of the deploy user.
+5. Edit `/opt/looprun/.env` (replace every `CHANGE_ME`: the domain and the Google client id). The Mongo password and JWT secret are generated for you (`openssl rand`); the prod compose file refuses to start if either is empty.
+6. Add the GitHub Actions deploy key (section 8) to `~/.ssh/authorized_keys` of the deploy user, and note the host key for `LIGHTSAIL_HOST_KEY` (`ssh-keyscan -t ed25519 <host>`).
 7. First start: `cd /opt/looprun && docker compose -f docker-compose.prod.yml up -d --build`.
 
 The script is idempotent; re-running it never overwrites `.env`.
@@ -109,13 +109,20 @@ Settings > Secrets and variables > Actions. The deploy job uses the `production`
 | `LIGHTSAIL_HOST` | deploy | Static IP or hostname of the instance |
 | `LIGHTSAIL_USER` | deploy | SSH user (for example `ubuntu`); must be in the `docker` group |
 | `LIGHTSAIL_SSH_KEY` | deploy | Private key (full PEM/OpenSSH text) of a key dedicated to deploys. Create with `ssh-keygen -t ed25519 -f looprun_deploy -C github-deploy -N ""`, put `looprun_deploy.pub` on the host, paste `looprun_deploy` into the secret, delete the local copy. |
-| `LIGHTSAIL_HOST_KEY` | deploy (optional but recommended) | Host public key line without the hostname, for example `ssh-ed25519 AAAA...`. Get it with `ssh-keyscan -t ed25519 <host>` from a network you trust. If unset, the workflow trusts the key on first contact and prints a warning. |
+| `LIGHTSAIL_HOST_KEY` | deploy (**required**; the job fails without it) | Host public key line without the hostname, for example `ssh-ed25519 AAAA...`. Get it with `ssh-keyscan -t ed25519 <host>` from a network you trust. The deploy ssh uses `StrictHostKeyChecking=yes`, so a changed host key (for example after rebuilding the instance) makes the deploy fail until you update this secret. |
 | `LOOPRUN_HEALTH_URL` | deploy | `https://<domain>/healthz` |
 | `ANDROID_KEYSTORE_B64` | release-android | Base64 of the upload keystore (section 9) |
 | `ANDROID_KEYSTORE_PASSWORD` | release-android | Keystore password |
 | `ANDROID_KEY_PASSWORD` | release-android | Key password |
 | `ANDROID_KEY_ALIAS` | release-android | Key alias (for example `upload`) |
-| `GOOGLE_SERVICES_JSON_B64` | release-android (optional) | Base64 of Firebase `google-services.json`, needed for Crashlytics. Not a high-grade secret but keep it out of the repo. |
+
+Repository **variables** (not secrets; Settings > Secrets and variables > Actions > Variables), read by `release-android.yml`. The release job fails with a clear message if any is empty; there are no defaults, so a release can never point at the emulator address:
+
+| Variable | Used by | Value |
+| --- | --- | --- |
+| `API_BASE_URL` | release-android | `https://<domain>` (no trailing path; must start with `https://`) |
+| `GOOGLE_SERVER_CLIENT_ID` | release-android | The Google OAuth **web** client id (same value as `LOOPRUN_GOOGLE_CLIENT_ID` on the server) |
+| `MAP_STYLE_URL` | release-android | Production MapLibre style URL from your tile provider. The MapLibre demo server (`demotiles.maplibre.org`) is rejected by the job. |
 
 `GITHUB_TOKEN` is provided automatically; the deploy gate uses it with `actions: read`.
 
@@ -131,17 +138,20 @@ base64 -w0 upload-keystore.jks > upload-keystore.b64      # macOS: base64 -i upl
 ```
 Paste the contents of `upload-keystore.b64` into secret `ANDROID_KEYSTORE_B64`, and set the passwords and alias secrets. Store the `.jks` file and passwords in a password manager plus one offline backup, then delete `upload-keystore.b64`. Enrol in **Play App Signing** when creating the app in Play Console: Google holds the real app-signing key and your keystore is only the upload key, which Google can reset if you lose it.
 
-How the workflow signs: it writes `mobile/android/app/upload-keystore.jks` and `mobile/android/key.properties` (`storePassword`, `keyPassword`, `keyAlias`, `storeFile`) on the runner only. **Dependency on the mobile lane:** `mobile/tool/bootstrap.sh` (or the Gradle file it produces) must make `android/app/build.gradle(.kts)` read `key.properties` and use it for the `release` signing config. If that is missing, the build will be signed with the debug key, which Play rejects. Verify once by running the workflow and checking the AAB with `keytool -printcert -jarfile app-release.aab`.
+How the workflow signs: `mobile/tool/patch_signing.sh` edits the generated `android/app/build.gradle.kts` (written against the Flutter stable app template as of 2026-11-03) to add a `release` signing config that reads `android/key.properties`, and to point the `release` build type at it. The workflow then writes `android/app/upload-keystore.jks` and `android/key.properties` on the runner only. The job **fails** if the patch anchors are not found in the generated file (a Flutter template change), if the debug signing config is still referenced, or if the finished AAB is not verified by `jarsigner -verify` or carries an "Android Debug" certificate. The script has been tested only against the template text, not by an actual Gradle build; the first real run of the workflow is the real test. Check by hand with `jarsigner -verify -verbose -certs app-release.aab`.
 
 Other release steps: bump `version:` in `mobile/pubspec.yaml` (build number must increase on every upload), run the workflow, upload the AAB to the closed test track (see `docs/compliance/closed-test-checklist.md`).
 
 ## 10. CI overview
 
-`.github/workflows/ci.yml` runs on every push and PR: Python (ruff, pytest for engine and server against real Redis and MongoDB services), Flutter (bootstrap, analyze, test, debug APK uploaded as `looprun-debug-apk`), Docker (image build only, nothing is pushed). Local equivalents: `make lint`, `make test`, `make build`.
+`.github/workflows/ci.yml` runs on every push and PR: Python (ruff, pytest for engine and server; the server tests use `fakeredis` and `mongomock-motor`, so CI does **not** exercise a real Redis or MongoDB), Flutter (bootstrap, pub get, build_runner, analyze, test, debug APK uploaded as `looprun-debug-apk`), Docker (image build, `docker compose config` on both compose files with dummy values; nothing is pushed). Local equivalents: `make lint`, `make test`, `make build`.
 
 ## 11. Known gaps
 
-- Server environment variable names in `.env` and compose (`LOOPRUN_MONGO_URL`, `LOOPRUN_REDIS_URL`, `LOOPRUN_GOOGLE_CLIENT_ID`, `LOOPRUN_JWT_SECRET`) are assumptions until reconciled with `server/app`.
+- Server environment variable names (`LOOPRUN_MONGO_URL`, `LOOPRUN_REDIS_URL`, `LOOPRUN_GOOGLE_CLIENT_ID`, `LOOPRUN_JWT_SECRET`, `LOOPRUN_DEV_AUTH`) were checked against `server/app/config.py` by the verifier on 2026-11-03.
 - Backups are local only.
-- Single host, single instance: a deploy causes a short outage while containers are recreated.
-- Nothing here has been executed against a real Docker daemon or GitHub runner by the author.
+- Single host, single instance: a deploy causes a short outage while containers are recreated. There is no automatic rollback after a failed health check.
+- The release workflow can be dispatched from any ref and has no CI gate.
+- Firebase/Crashlytics and Play Integrity are planned but not in the app yet, so there is no `google-services.json` step.
+- See `docs/verification/O1-C1-followups.md` for work owned by the server and mobile lanes.
+- Nothing here has been executed against a real GitHub runner, Docker daemon or Lightsail host by the author.

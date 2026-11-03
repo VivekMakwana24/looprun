@@ -2,6 +2,11 @@ name: Release Android (signed AAB)
 
 # Builds a signed app bundle and uploads it as a workflow artifact. It does NOT publish to Google Play:
 # download the AAB and upload it in the Play Console yourself.
+#
+# Needs (Settings > Secrets and variables > Actions):
+#   secrets:   ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD, ANDROID_KEY_ALIAS
+#   variables: API_BASE_URL (https://...), GOOGLE_SERVER_CLIENT_ID, MAP_STYLE_URL (production map style)
+# The job fails, with a message, if any of them is empty. There are deliberately no defaults.
 on:
   workflow_dispatch:
 
@@ -16,9 +21,34 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      GOOGLE_SERVER_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
+      MAP_STYLE_URL: ${{ vars.MAP_STYLE_URL }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check signing secrets and build settings
+        run: |
+          missing=0
+          for v in ANDROID_KEYSTORE_B64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD ANDROID_KEY_ALIAS; do
+            if [ -z "${!v}" ]; then echo "::error::Secret $v is not set"; missing=1; fi
+          done
+          for v in API_BASE_URL GOOGLE_SERVER_CLIENT_ID MAP_STYLE_URL; do
+            if [ -z "${!v}" ]; then echo "::error::Repository variable $v is not set (Settings > Secrets and variables > Actions > Variables). Release builds have no default for it."; missing=1; fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+          case "$API_BASE_URL" in
+            https://*) ;;
+            *) echo "::error::API_BASE_URL must start with https:// (got: $API_BASE_URL)"; exit 1 ;;
+          esac
+          case "$MAP_STYLE_URL" in
+            https://*) ;;
+            *) echo "::error::MAP_STYLE_URL must start with https://"; exit 1 ;;
+          esac
+          case "$MAP_STYLE_URL" in
+            *demotiles.maplibre.org*) echo "::error::MAP_STYLE_URL points at the MapLibre demo server, which is not for production use"; exit 1 ;;
+          esac
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -27,39 +57,63 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Check signing secrets
-        run: |
-          for v in ANDROID_KEYSTORE_B64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD ANDROID_KEY_ALIAS; do
-            if [ -z "${!v}" ]; then echo "::error::Secret $v is not set"; exit 1; fi
-          done
+
       - name: Generate Android scaffold
         working-directory: mobile
         run: bash tool/bootstrap.sh
+
+      - name: Inject release signing config
+        working-directory: mobile
+        run: |
+          bash tool/patch_signing.sh android
+          # Fail the job unless the generated Gradle file really uses the release signing config.
+          grep -q 'signingConfig = signingConfigs.getByName("release")' android/app/build.gradle.kts \
+            || { echo '::error::release signing config was not injected'; exit 1; }
+          if grep -q 'signingConfigs.getByName("debug")' android/app/build.gradle.kts; then
+            echo '::error::release build type still references the debug signing config'; exit 1
+          fi
+
       - name: Install keystore and key.properties
         run: |
-          echo "$ANDROID_KEYSTORE_B64" | base64 -d > mobile/android/app/upload-keystore.jks
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > mobile/android/app/upload-keystore.jks
           {
             echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
             echo "keyPassword=$ANDROID_KEY_PASSWORD"
             echo "keyAlias=$ANDROID_KEY_ALIAS"
             echo "storeFile=upload-keystore.jks"
           } > mobile/android/key.properties
-      - name: Install google-services.json (optional, needed for Crashlytics)
-        run: |
-          if [ -n "$GOOGLE_SERVICES_JSON_B64" ]; then
-            echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > mobile/android/app/google-services.json
-          else
-            echo "::warning::GOOGLE_SERVICES_JSON_B64 not set; building without google-services.json"
-          fi
+
       - name: Pub get
         working-directory: mobile
         run: flutter pub get
       - name: Generate Drift code
         working-directory: mobile
         run: dart run build_runner build --delete-conflicting-outputs
+
       - name: Build release AAB
         working-directory: mobile
-        run: flutter build appbundle --release
+        run: |
+          flutter build appbundle --release \
+            --dart-define=API_BASE_URL="$API_BASE_URL" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
+            --dart-define=MAP_STYLE_URL="$MAP_STYLE_URL"
+
+      - name: Verify the AAB is signed with the upload key, not the debug key
+        run: |
+          aab=mobile/build/app/outputs/bundle/release/app-release.aab
+          out="$(jarsigner -verify -verbose -certs "$aab" 2>&1)" || { echo "$out" | tail -n 20; echo '::error::jarsigner could not verify the AAB'; exit 1; }
+          echo "$out" | tail -n 15
+          if echo "$out" | grep -qi 'Android Debug'; then
+            echo '::error::AAB is signed with the Android Debug certificate'; exit 1
+          fi
+          cert="$(keytool -printcert -jarfile "$aab" 2>&1)"
+          echo "$cert" | head -n 12
+          if echo "$cert" | grep -qi 'Android Debug'; then
+            echo '::error::AAB certificate owner is Android Debug'; exit 1
+          fi
+          echo "$out" | grep -q 'jar verified' || { echo '::error::jarsigner did not report "jar verified"'; exit 1; }
+
       - uses: actions/upload-artifact@v4
         with:
           name: looprun-release-aab

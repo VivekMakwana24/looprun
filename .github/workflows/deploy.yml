@@ -57,7 +57,7 @@ jobs:
     steps:
       - name: Check secrets are present
         run: |
-          for v in LIGHTSAIL_HOST LIGHTSAIL_USER LIGHTSAIL_SSH_KEY LOOPRUN_HEALTH_URL; do
+          for v in LIGHTSAIL_HOST LIGHTSAIL_USER LIGHTSAIL_SSH_KEY LIGHTSAIL_HOST_KEY LOOPRUN_HEALTH_URL; do
             if [ -z "${!v}" ]; then echo "::error::Secret $v is not set"; exit 1; fi
           done
       - name: Set up SSH
@@ -65,15 +65,11 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$LIGHTSAIL_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          if [ -n "$LIGHTSAIL_HOST_KEY" ]; then
-            printf '%s %s\n' "$LIGHTSAIL_HOST" "$LIGHTSAIL_HOST_KEY" > ~/.ssh/known_hosts
-          else
-            echo "::warning::LIGHTSAIL_HOST_KEY not set; trusting host key on first contact (less safe)."
-            ssh-keyscan -t ed25519 "$LIGHTSAIL_HOST" > ~/.ssh/known_hosts
-          fi
+          printf '%s %s\n' "$LIGHTSAIL_HOST" "$LIGHTSAIL_HOST_KEY" > ~/.ssh/known_hosts
       - name: Update checkout and restart stack
         run: |
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$LIGHTSAIL_USER@$LIGHTSAIL_HOST" \
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$LIGHTSAIL_USER@$LIGHTSAIL_HOST" \
             bash -s -- "$GITHUB_SHA" <<'REMOTE'
           set -euo pipefail
           cd /opt/looprun

@@ -15,30 +15,8 @@ jobs:
   python:
     name: Python (ruff + pytest)
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      mongo:
-        image: mongo:7
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-          --health-start-period 20s
-    env:
-      LOOPRUN_MONGO_URL: mongodb://localhost:27017/looprun_test
-      LOOPRUN_REDIS_URL: redis://localhost:6379/0
-      LOOPRUN_DEV_AUTH: "1"
+    # Server tests use fakeredis and mongomock-motor (see server/tests/conftest.py); no real
+    # Redis or MongoDB is needed until integration tests exist (docs/verification/O1-C1-followups.md).
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -104,3 +82,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image (not pushed)
         run: docker build -f server/Dockerfile -t looprun-server:ci .
+      - name: Validate compose files (docker compose config)
+        run: |
+          sudo mkdir -p /opt/looprun
+          printf 'MONGO_PASSWORD=ci\nLOOPRUN_DOMAIN=ci.example.com\nLOOPRUN_JWT_SECRET=ci-not-a-secret\nLOOPRUN_GOOGLE_CLIENT_ID=ci.apps.googleusercontent.com\n' | sudo tee /opt/looprun/.env >/dev/null
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.prod.yml --env-file /opt/looprun/.env config --quiet

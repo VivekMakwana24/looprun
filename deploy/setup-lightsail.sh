@@ -27,7 +27,7 @@ else
   log "Installing Docker"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
-  apt-get install -y ca-certificates curl gnupg git cron
+  apt-get install -y ca-certificates curl gnupg git cron openssl
   install -m 0755 -d /etc/apt/keyrings
   if [ ! -f /etc/apt/keyrings/docker.asc ]; then
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
@@ -41,7 +41,7 @@ else
   apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
 systemctl enable --now docker
-apt-get install -y git cron >/dev/null
+apt-get install -y git cron openssl >/dev/null
 if id "$DEPLOY_USER" >/dev/null 2>&1; then
   usermod -aG docker "$DEPLOY_USER"
 fi
@@ -81,7 +81,9 @@ if [ -f "$ENV_FILE" ]; then
   log ".env already exists, leaving it alone"
 else
   log "Creating $ENV_FILE template"
-  MONGO_PW="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  MONGO_PW="$(openssl rand -hex 24)"
+  JWT_SECRET="$(openssl rand -hex 32)"
+  umask 077
   cat > "$ENV_FILE" <<ENVEOF
 # Looprun production settings. Never commit this file. Keep it chmod 600.
 # Every value marked CHANGE_ME must be set before the first deploy.
@@ -93,11 +95,12 @@ LOOPRUN_DOMAIN=CHANGE_ME.example.com
 MONGO_PASSWORD=${MONGO_PW}
 
 # ---- App settings read by the server ----
-# NOTE: variable names below are assumptions; reconcile with server/app config before first deploy.
 LOOPRUN_GOOGLE_CLIENT_ID=CHANGE_ME.apps.googleusercontent.com
-LOOPRUN_JWT_SECRET=CHANGE_ME_long_random_string
+# Signs session tokens (generated for you; rotating it signs everyone out)
+LOOPRUN_JWT_SECRET=${JWT_SECRET}
 # Do NOT set LOOPRUN_DEV_AUTH in production.
 ENVEOF
+  umask 022
   chown "$DEPLOY_USER":"$DEPLOY_USER" "$ENV_FILE"
   chmod 600 "$ENV_FILE"
 fi

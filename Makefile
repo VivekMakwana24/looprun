@@ -1,4 +1,4 @@
-.PHONY: help up down logs build test test-engine test-server lint prod-config validate
+.PHONY: help up down logs build test test-engine test-server lint validate
 
 help:
 	@echo "make up | down | logs | build | lint | test | validate"
@@ -29,4 +29,4 @@ test: test-engine test-server
 # Static checks that need no Docker daemon.
 validate:
 	python3 -c "import yaml; [yaml.safe_load(open(f)) for f in ('docker-compose.yml','docker-compose.prod.yml')]; print('compose yaml parses')"
-	bash -n deploy/setup-lightsail.sh deploy/backup.sh
+	for f in deploy/setup-lightsail.sh deploy/backup.sh mobile/tool/bootstrap.sh mobile/tool/patch_android.sh mobile/tool/patch_signing.sh; do bash -n $$f || exit 1; done; echo 'bash -n ok'

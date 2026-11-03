@@ -21,12 +21,12 @@ RUN groupadd --system --gid 10001 looprun \
  && useradd --system --uid 10001 --gid looprun --home-dir /app --shell /usr/sbin/nologin looprun
 COPY --from=build /opt/venv /opt/venv
 WORKDIR /app
-USER looprun
+USER 10001:10001
 EXPOSE 8000
 
 # Used by the API container. The worker has no HTTP port; docker-compose disables this check for it.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).status == 200 else 1)"
+  CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).status == 200 else 1)"]
 
 # Default command = API. The worker overrides it (see docker-compose files):
 #   celery -A app.worker:celery_app worker --loglevel=info
