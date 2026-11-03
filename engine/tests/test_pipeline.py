@@ -161,3 +161,19 @@ def test_deterministic_and_does_not_mutate_input():
 def test_status_property():
     assert process_run(line(30, 2)).status == "accepted"
     assert process_run(line(30, 10)).status == "pending_review"
+
+
+def test_gap_with_impossible_speed_is_teleport():
+    fx = line(30, 2)
+    gap_deg = 5000 / M_PER_DEG_LAT  # 5 km in the 30 s the gap lasts
+    fx = fx[:15] + [replace(f, lat=f.lat + gap_deg, t=f.t + 25_000) for f in fx[15:]]
+    r = process_run(fx)
+    tp = next(f for f in r.flags if f.code == "teleport")
+    assert tp.severity == "hard" and r.status == "pending_review" and r.cells == []
+
+
+@pytest.mark.parametrize("speed,expected", [(6.0, False), (8.0, True)])
+def test_short_run_under_window_checked_for_vehicle_speed(speed, expected):
+    fx = line(10, speed, dt=3)  # 27 s, shorter than the 60 s window
+    assert fx[-1].t - fx[0].t < 60_000
+    assert ("vehicle_speed" in codes(process_run(fx))) is expected

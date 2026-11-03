@@ -111,3 +111,33 @@ def test_tiny_loop_rejected(run):
     assert r.loops == [] and r.cells == []
     assert "loop_rejected_small" in codes(r)
     assert r.status == "accepted"  # soft flag only
+
+
+def test_gps_dropout_loop_still_found(run, load):
+    r = run("gps_dropout")
+    assert len(r.loops) == 1 and r.cells and r.status == "accepted"
+    assert not codes(r) & {"teleport", "vehicle_speed"}
+    fx = load("gps_dropout")
+    gap = max(b.t - a.t for a, b in zip(fx, fx[1:], strict=False))
+    assert 40_000 <= gap <= 50_000  # the outage is really in the file
+    # straight line across the gap is counted: distance stays close to the full 1600 m square
+    assert 1550 < r.distance_m < 1700
+
+
+def test_tunnel_loop_found_no_hard_flags(run, load):
+    r = run("tunnel")
+    assert len(r.loops) == 1 and r.cells and r.status == "accepted"
+    assert not [f for f in r.flags if f.severity == "hard"]
+    fx = load("tunnel")
+    assert max(b.t - a.t for a, b in zip(fx, fx[1:], strict=False)) >= 90_000
+    # chord across a corner is shorter than the route, but the loop area is nearly intact
+    assert r.loops[0].area_km2 > 0.14
+
+
+def test_bowtie_two_lobes(run):
+    r = run("bowtie")
+    assert len(r.loops) == 2 and r.status == "accepted"
+    assert not [f for f in r.flags if f.severity == "hard"]
+    for lp in r.loops:
+        assert lp.area_km2 == pytest.approx(0.04, rel=0.1) and lp.cells
+    assert set(r.cells) == set(r.loops[0].cells) | set(r.loops[1].cells)

@@ -121,6 +121,26 @@ def tiny_loop(rng):
     return walk(square(60), 3.0, 2, rng, noise_m=0.5)
 
 
+def drop_window(points, start_s, end_s):
+    """Remove fixes between start_s and end_s after the first fix (a signal outage)."""
+    t0 = points[0]["t"]
+    return [p for p in points if not (start_s * 1000 <= p["t"] - t0 < end_s * 1000)]
+
+
+def gps_dropout(rng):
+    # 40 s without fixes in the middle of the second side, runner keeps moving at 3 m/s
+    return drop_window(walk(square(400), 3.0, 5, rng), 200, 240)
+
+
+def tunnel(rng):
+    # 90 s gap (270 m of route); fixes resume on the route further along
+    return drop_window(walk(square(400), 3.0, 5, rng), 180, 270)
+
+
+def bowtie(rng):
+    return walk([(0, 0), (400, 0), (0, 400), (400, 400), (0, 0)], 3.0, 5, rng)
+
+
 BUILDERS = {
     "clean_square": clean_square,
     "figure_eight": figure_eight,
@@ -132,6 +152,9 @@ BUILDERS = {
     "teleport": teleport,
     "mock": mock_run,
     "tiny_loop": tiny_loop,
+    "gps_dropout": gps_dropout,
+    "tunnel": tunnel,
+    "bowtie": bowtie,
 }
 
 

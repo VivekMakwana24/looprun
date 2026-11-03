@@ -30,6 +30,15 @@ def speed_flags(fixes: list[Fix], cum: list[float], cfg: Config) -> list[Flag]:
 
     # vehicle_speed: average over any window of at least sustained_window_s
     window_ms = cfg.sustained_window_s * 1000
+    if len(fixes) >= 2 and fixes[-1].t - fixes[0].t < window_ms:
+        # run shorter than the window: judge the whole run with the same threshold
+        secs = (fixes[-1].t - fixes[0].t) / 1000
+        v = cum[-1] / secs
+        if v > cfg.max_sustained_speed_ms:
+            flags.append(Flag("vehicle_speed", "hard",
+                              f"{v:.1f} m/s over the whole {secs:.0f} s run "
+                              f"(limit {cfg.max_sustained_speed_ms} m/s)"))
+        return flags
     best, j = 0.0, 0
     for i in range(len(fixes)):
         j = max(j, i)

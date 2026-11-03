@@ -54,3 +54,13 @@ Decisions where ENGINE_SPEC.md was ambiguous. The public API is unchanged.
     the `teleport` limit (12.5 m/s), and the fixture is meant to isolate `vehicle_speed`.
     Projection for geometry is a local equirectangular plane around the first fix (error far
     below 1% at city scale).
+17. **Short runs and `vehicle_speed` (E3, from the E1-E2 verification).** If the whole cleaned run
+    spans less than `sustained_window_s`, the average speed of the whole run is compared with
+    `max_sustained_speed_ms` instead (same threshold). This supersedes the "never flagged" part of
+    #9. A fast burst inside a longer run is still only covered by the window rule and `teleport`.
+18. **Signal gaps (E3).** There is no special handling: a gap is just a long hop between two fixes
+    and the straight line across it counts towards distance and the loop outline. The speed rules
+    use the implied speed, so a 40 s or 90 s gap at running pace raises nothing, while 5 km in 30 s
+    raises `teleport`. Observed: the dropout and tunnel fixtures keep their loop (area above 0.14
+    km2 because chords cut corners); `moving_seconds` includes gap time because the implied speed
+    is above 0.5 m/s. The bowtie gives two loops of about 0.04 km2 each with their own cells.
