@@ -4,43 +4,37 @@ Thanks for helping. You will install an early version of Looprun on your Android
 
 ## 1. Join the test
 
-1. You need an **Android phone** and a **Google account** (the one you use in the Play Store).
-2. Send the organiser the Gmail / Google account email you will use. They add it to the tester list.
-3. Open the opt-in link you receive: [OPT_IN_LINK] **(from Play Console > Testing > Closed testing > your track > Testers > "How testers join")**. Sign in with the same Google account and tap **Become a tester**.
-4. Then tap the Play Store link on that page (or search "Looprun" on your phone while signed in) and **Install**. It can take up to a few hours for the app to show after opting in.
-5. **Do not opt out or uninstall during the test period** [TEST_START] to [TEST_END]. Leaving early removes you from the count.
+1. You need an **Android phone (Android 7 or newer)** and a Google account (the one you use in the Play Store).
+2. Send the organiser the Google account email you will use. They add it to the tester list.
+3. Open the opt-in link: [OPT_IN_LINK]. Sign in with the same account and tap **Become a tester**.
+4. Tap the Play Store link on that page and **Install**. It can take a few hours to appear.
+5. **Do not opt out or uninstall between [TEST_START] and [TEST_END].** Leaving early removes you from the count.
 
 ## 2. What to try (about 15 minutes, plus real runs)
 
 1. Open Looprun and sign in with Google.
-2. Tap Start run. Read the location notice, tap Agree, allow location "while using the app", allow notifications.
-3. Walk or run a loop outdoors, at least 400 metres around a block or park, ending near where you started.
-4. Lock the phone halfway. The Looprun notification should stay. Unlock and check the app still shows progress.
-5. Tap Stop. Check the result screen: distance, time, cells claimed.
-6. Open the map and find your cells. Open the leaderboard.
-7. Settings: add a home zone, try the freeze option, then end the freeze.
-8. Run again on another day, over some of the same streets.
-9. Try the Report option on a run or a cell once.
-10. Optional: Settings > Delete account on a throwaway account, and confirm you are signed out.
+2. Read the location screen, tap **Agree and continue**, allow location "while using the app" and notifications.
+3. Open the map: it should centre on you (if not, tell us).
+4. Go to Run and tap Start. Run or walk a loop outdoors of **at least 600 metres in length (roughly 1 km is safer), enclosing a real block or park**, ending near where you started. Very small loops are rejected as too small.
+5. Lock the phone halfway. The Looprun notification should stay. Unlock: progress should still show.
+6. Stop the run inside the app (the notification has no Stop button). Check the result screen: distance, time, cells claimed.
+7. Open the map and find your cells. Open the leaderboard.
+8. Profile: add a home zone, try the freeze option, then end it.
+9. Run again another day over some of the same streets.
+10. Optional, on a throwaway account: Profile > Delete account, and confirm you are signed out.
 
-Please do not use fake GPS apps (except if the organiser asks you to test anti-cheat), and please run safely.
+Please do not use fake GPS apps unless the organiser asks you to, and run safely.
+
+**Not in this build, so please do not test or report as missing:** reporting a run or cell, live map updates (the map refreshes when you move or zoom it), crash reporting.
 
 ## 3. Report bugs
 
-Send to [CONTACT_EMAIL] or [FEEDBACK_CHANNEL]. Include:
-
-- Phone brand and model, Android version
-- What you did, what you expected, what happened
-- A screenshot or screen recording if you can
-- Approximate time, so the organiser can match server logs
-- Whether it happens every time
-
-You can also use Play Store > Looprun > "Send feedback" if shown. Do not send your exact home address.
+Send to [CONTACT_EMAIL] or [FEEDBACK_CHANNEL]. Include phone brand and model, Android version, what you did / expected / saw, a screenshot or screen recording if you can, the approximate time, and whether it happens every time. Do not send your exact home address.
 
 ## 4. Which phones we want
 
-Variety matters more than flagships. Wanted: Samsung, Xiaomi / Redmi / POCO, Google Pixel, OnePlus, Oppo / Realme, Motorola, and any Android 8+ phone you have. These brands are known for aggressive battery saving, which can stop background GPS: if the run stops recording when the screen is off, tell us the brand and whether you changed any battery settings. Android 13 and 14 or newer are especially useful (notification and foreground service rules differ).
+Variety matters more than flagships: Samsung, Xiaomi / Redmi / POCO, Google Pixel, OnePlus, Oppo / Realme, Motorola, and any Android 7+ phone. These brands are known for aggressive battery saving, which can stop GPS with the screen off: if recording stops, tell us the brand and whether you changed battery settings. Android 13 and newer are especially useful.
 
 ## 5. Privacy during the test
 
-Only precise location during an active run, home zones you add yourself, and your Google name and email are used. Delete your account in the app at any time; see the privacy policy at [PRIVACY_POLICY_URL].
+Precise location during a run, a one-off position to centre the map and to place home zones, the home-zone centre, and your Google account ID and first name are used. The map picture comes from [MAP_TILE_PROVIDER]. Delete your account in the app at any time; policy: [PRIVACY_POLICY_URL].

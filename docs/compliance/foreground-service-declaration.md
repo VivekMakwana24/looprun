@@ -1,39 +1,37 @@
 # Foreground service declaration (location)
 
-Where: Play Console > Policy and programs > App content > **Foreground service permissions** (name as of my last check; **verify in your Console**). Per Google's help page "Understanding foreground service and full-screen intent requirements" (fetched 2026-11-03), for each declared foreground service type the form asks for: (1) a description of the app functionality that uses the service, (2) the user impact if the system defers or interrupts the task, (3) a link to a video showing the user steps that trigger the feature, and (4) a specific use case from a preset list, or manual entry if none fits. Exact form wording and the preset list could not be confirmed; read the form and adapt.
+Where: Play Console > Policy and programs > App content > Foreground service permissions (verify the name in your Console). Per Google's help page 13392821 (fetched 2026-11-03 by the builder and the verifier), for each declared type the form asks for: (1) the app functionality that uses the service, (2) the user impact if the system defers or interrupts it, (3) a link to a video showing the user steps that trigger it, (4) a use case. For the location type the page lists three presets: **background location updates (user-initiated sharing)**, **background location updates (navigation, for example ride tracking)** and **geofencing**. Exact form wording could not be confirmed.
 
-## Technical facts the declaration relies on (verify with the mobile lane)
+## Technical facts the declaration relies on (verifier-confirmed in code, 2026-11-03)
 
-- Manifest: `<service android:foregroundServiceType="location" ...>` plus permissions `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `ACCESS_FINE_LOCATION`, `POST_NOTIFICATIONS`.
-- The service is started only when the user presses **Start run** while the app is visible, and stops when the user presses **Stop** (or the app ends the run).
-- A persistent notification is shown while it runs, with a Stop action.
-- No `ACCESS_BACKGROUND_LOCATION`.
+- Manifest: service with `foregroundServiceType="location"`, permissions `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, fine location, `POST_NOTIFICATIONS`. No `ACCESS_BACKGROUND_LOCATION`.
+- The service starts only from the Run screen's Start button, after location permission is granted, and stops when the run ends.
+- A persistent notification is shown while it runs. **It has no Stop button**; the run is stopped inside the app.
+- Reading the current position for the map or a home zone is done while the app is open and does not use the service.
 
-## 1. Description of the functionality (paste, proposal)
+## 1. Functionality (paste, proposal)
 
-> Looprun is a running game. When the user taps Start run, the app starts a foreground service of type location that records the user's GPS position for the duration of the run. The service shows a persistent notification and stops when the user taps Stop. The recorded track is uploaded to our server to calculate the route, closed loops and map cells the user claims. Location is not collected outside an active, user-started run.
+> Looprun is a running game. When the user taps Start run, the app starts a foreground service of type location that keeps the app alive and recording the user's GPS position for the duration of that run, shown by a persistent notification. The recorded track is uploaded to our server after the run to calculate the route, closed loops and map cells the user claims. The service runs only during a run the user started and stops when the user ends it in the app. Outside a run the app does not collect location in the background.
 
 ## 2. User impact if interrupted (paste, proposal)
 
-> If the system stops or defers the service while the screen is off or the app is in another app, GPS points are lost for that period. The run would have gaps, loops may not close, and the user would lose the cells they ran for. A run is a continuous outdoor activity that the user is watching in real time, so it cannot be deferred or batched.
+> If the system stops or defers the service while the screen is off or another app is in front, GPS points are lost for that period. The run would have gaps, loops would not close, and the user would lose the cells they ran for. A run is a continuous outdoor activity the user is performing in real time, so it cannot be deferred or batched.
 
-## 3. Use case selection
+## 3. Use case
 
-Choose the closest preset. Candidates: **"Navigation or ride tracking"** (active tracking of a journey the user started) is the nearest to a run tracker. If the list has a fitness or activity tracking entry, prefer that. If nothing fits, enter manually: "User-initiated run (workout) tracking." **[Verify the preset list in the Console.]**
+Choose **"Background location updates (navigation, for example ride tracking)"**, the nearest to tracking a route the user started. If the Console wording differs, or you prefer, enter manually: "User-initiated run (workout) tracking." **[Confirm against the live list.]**
 
-## 4. Video (required) shot list
-
-Screen recording, 30-60 seconds, shown from a real Android device, with link (unlisted YouTube or similar, no login needed):
+## 4. Video shot list (30 to 60 seconds, real Android device, unlisted link)
 
 1. Fresh install, sign in with Google.
-2. Tap Start run: show the in-app location disclosure (see `location-disclosure.md`), tap Agree, show the Android permission dialog, allow while using the app.
-3. Show the run screen and the persistent notification in the notification shade.
-4. Press Home, lock the screen, wait 10 seconds, unlock: the notification is still there and the track continues.
-5. Return to the app, tap Stop: the notification disappears.
+2. The in-app location disclosure appears; tap Agree and continue; show the Android location dialog; allow while using the app; allow notifications.
+3. Tap Start run; show the Run screen and the notification in the shade.
+4. Press Home, lock the screen, wait 10 seconds, unlock: notification still there, track still growing.
+5. Return to the app and stop the run in the app; the notification disappears.
 6. Show the result screen.
 
 ## Pre-submission checks
 
-- [ ] Declared types in the manifest equal the types declared in the Console.
+- [ ] Types in the manifest equal types in the Console.
 - [ ] Video link works while logged out.
-- [ ] Declaration text equals real behaviour (no background start, no hidden tracking).
+- [ ] Text equals real behaviour.

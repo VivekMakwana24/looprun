@@ -1,53 +1,60 @@
 # In-app prominent disclosure for location
 
-Google Play requires an in-app disclosure, shown **before** the Android location permission dialog, that is not buried in the privacy policy, uses the user's language, and requires an explicit action. Source: Google Play User Data policy ("Prominent Disclosure and Consent Requirement"). **[Unverified: I could not open the policy in this session; compare the final wording with the current policy text.]**
+Google Play requires an in-app disclosure that is shown in normal use (not only in the privacy policy), describes the data collected, how it is used and whether it is shared, immediately precedes the runtime permission request, and requires an affirmative action. Checked against Google's User Data policy page by the verifier on 2026-11-03; the background-location help page additionally says the text must contain the word "location" and indicate background use.
 
-## Where and when to show it
+## Flow (matches the code today)
 
-- First time the user taps **Start run** (or any control that would trigger the location permission request), before calling the permission API.
-- A full screen or dialog, not a toast. Two buttons: **Agree and continue** and **Not now**.
-- Tapping **Not now** must NOT trigger the permission prompt, and the app stays usable (map, leaderboard) without recording.
-- Show it again if the user later revokes the permission and tries to run.
-- Do not request background location ("Allow all the time"). The run is recorded by a foreground service with a visible notification that the user starts. **[Verify with the mobile lane that the manifest has no ACCESS_BACKGROUND_LOCATION.]**
+- `AppGate` shows the disclosure screen right after sign-in, until the user accepts (stored as `location_disclosure_accepted_v1`).
+- **Agree and continue** triggers the Android location prompt (then notifications). Nothing is requested before that tap.
+- **No thanks, sign out** signs the user out. Looprun needs location to work, so there is no "use the app without location" path in this build.
+- The app does not request background ("all the time") location.
 
-## Text (English, proposal; keep it this short)
+## In-app screen text (must match code)
 
-**Title:** Looprun uses your location
+The mobile lane must make `mobile/lib/features/disclosure/disclosure_screen.dart` show exactly this. Items marked CHANGE are different from the code today.
 
-**Body:**
+**App bar title:** `Your location`
 
-> Looprun records your precise location **while you are recording a run**, including when the screen is off or you switch to another app. A notification stays visible the whole time, and recording stops when you press Stop.
->
-> We use it to work out your route, the loops you close and the cells you claim, and to spot cheating. Your run is saved on our server. Other players see only which cells you own, never your route.
->
-> We do not show ads and we do not share your location with anyone else.
->
-> Read more in our Privacy Policy.
+**Heading:** `Before we ask for location access`
 
-**Buttons:** `Agree and continue` | `Not now`
+**What we collect** (CHANGE: adds the map and home-zone reads)
+> Your precise GPS position (latitude, longitude, time and accuracy) while you record a run, and whether your phone reports it as a mock location. We also read your current position once when the map opens, to centre it on you, and once when you add a home zone, to place it.
 
-The words "Privacy Policy" must link to the hosted policy.
+**Why** (CHANGE: adds map and home zone)
+> To find the loops you run, claim the map cells inside them, and check that runs are fair. Your track is sent to our server when you finish a run. The centre point of a home zone is also stored on our server, so your name stays hidden there.
+
+**When** (CHANGE: adds the non-run reads)
+> While a run is active, Looprun shows a notification and keeps recording even if you lock the screen or switch to another app. Outside a run it reads your location only for the map and home zone actions above. It never records in the background when no run is active.
+
+**Sharing** (CHANGE: new item)
+> We do not show ads and we do not share your location with anyone. Other players see which cells you own, never your route. The map images are loaded from [MAP_TILE_PROVIDER], which can see your IP address and the area you view.
+
+**Your control**
+> You can hide places such as your home with Home zones in Profile, and delete your account and runs at any time.
+
+**Link** (CHANGE: new): `Privacy Policy` opening [PRIVACY_POLICY_URL].
+
+**Buttons:** `Agree and continue` (key `disclosure_agree_button`) | `No thanks, sign out` (key `disclosure_decline_button`)
+
+`[MAP_TILE_PROVIDER]` and `[PRIVACY_POLICY_URL]` must be replaced by the real values at build time or in code before release.
 
 ## Checks against the policy requirements
 
 | Requirement | Covered by |
 | --- | --- |
-| Says what data is accessed and collected | "precise location", "saved on our server" |
-| Says how it is used | "route, loops, cells, spot cheating" |
-| Says whether it is shared | "do not share your location with anyone else" |
-| Says it is collected while app is not visible | "when the screen is off or you switch to another app" |
-| Shown before the permission prompt, explicit action | Agree button gates the prompt |
+| Says what is collected | "precise GPS position", the map and home-zone reads |
+| Says how it is used | "Why" |
+| Says whether it is shared | "Sharing" |
+| Mentions use while the app is not visible | "even if you lock the screen or switch to another app" |
+| Shown before the permission prompt, explicit action | Agree button triggers the prompt |
 
-## German version (proposal, have a native speaker check)
+## German version (proposal; have a native speaker check)
 
-**Titel:** Looprun verwendet deinen Standort
+**Titel:** Dein Standort. **Überschrift:** Bevor wir den Standortzugriff erfragen
 
-> Looprun erfasst deinen genauen Standort, **solange du einen Lauf aufzeichnest**, auch wenn der Bildschirm aus ist oder du eine andere App benutzt. Währenddessen bleibt eine Benachrichtigung sichtbar, und die Aufzeichnung endet, sobald du auf Stopp tippst.
->
-> Wir nutzen den Standort, um deine Strecke, geschlossene Runden und eroberte Felder zu berechnen und um Betrug zu erkennen. Dein Lauf wird auf unserem Server gespeichert. Andere Spieler sehen nur, welche Felder dir gehören, nie deine Strecke.
->
-> Wir zeigen keine Werbung und geben deinen Standort an niemanden weiter.
->
-> Mehr dazu in der Datenschutzerklärung.
+- **Was wir erfassen:** Deinen genauen GPS-Standort (Breite, Länge, Zeit und Genauigkeit), während du einen Lauf aufzeichnest, und ob dein Telefon ihn als Mock-Standort meldet. Außerdem lesen wir einmal deinen aktuellen Standort, wenn die Karte geöffnet wird (zum Zentrieren), und einmal, wenn du eine Heimzone anlegst.
+- **Wozu:** Um deine Runden zu finden, die Felder darin zu erobern und die Fairness der Läufe zu prüfen. Deine Strecke wird nach dem Lauf an unseren Server gesendet. Der Mittelpunkt einer Heimzone wird ebenfalls auf unserem Server gespeichert, damit dein Name dort verborgen bleibt.
+- **Wann:** Während eines Laufs zeigt Looprun eine Benachrichtigung und zeichnet weiter auf, auch bei gesperrtem Bildschirm oder in einer anderen App. Außerhalb eines Laufs wird der Standort nur für die genannten Karten- und Heimzonen-Aktionen gelesen, nie im Hintergrund.
+- **Weitergabe:** Wir zeigen keine Werbung und geben deinen Standort an niemanden weiter. Andere Spieler sehen nur, welche Felder dir gehören, nie deine Strecke. Die Kartenbilder kommen von [MAP_TILE_PROVIDER], dort sind deine IP-Adresse und der angezeigte Kartenausschnitt sichtbar.
 
-Buttons: `Zustimmen und weiter` | `Jetzt nicht`
+Buttons: `Zustimmen und weiter` | `Nein danke, abmelden`

@@ -21,7 +21,7 @@ Let D be the date the 12th tester is opted in (all 12 must stay in). The earlies
 - [ ] App created with name Looprun, free, default language.
 - [ ] Play App Signing enabled (default for new apps).
 - [ ] First signed AAB built with `.github/workflows/release-android.yml`; version code increases per upload.
-- [ ] Privacy policy hosted at a public URL and entered.
+- [ ] Privacy policy hosted at a public URL ([PRIVACY_POLICY_URL]) and entered.
 - [ ] App content forms complete: Data safety (`data-safety-answers.md`), ads (no), target audience 18+, content rating (`listing.md`), app access, location and foreground service declarations (`foreground-service-declaration.md`), account deletion URL.
 - [ ] In-app prominent disclosure implemented (`location-disclosure.md`).
 - [ ] Store listing draft saved (`listing.md`), icon, feature graphic, at least 2 screenshots.
@@ -38,5 +38,5 @@ Let D be the date the 12th tester is opted in (all 12 must stay in). The earlies
 ## After production access is granted
 
 - [ ] Create a production release from the tested build or newer, staged rollout (for example 20 percent) at first.
-- [ ] Watch Crashlytics and server logs (`docs/RUNBOOK.md`) and set up the uptime monitor.
+- [ ] Watch server logs (Crashlytics once added) (`docs/RUNBOOK.md`) and set up the uptime monitor.
 - [ ] Keep the privacy policy, Data safety answers and app behaviour in sync with every release.
