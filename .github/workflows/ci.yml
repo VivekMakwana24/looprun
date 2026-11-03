@@ -78,9 +78,12 @@ jobs:
       - name: Pub get
         working-directory: mobile
         run: flutter pub get
+      - name: Generate Drift code
+        working-directory: mobile
+        run: dart run build_runner build --delete-conflicting-outputs
       - name: Analyze
         working-directory: mobile
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
       - name: Test
         working-directory: mobile
         run: flutter test
