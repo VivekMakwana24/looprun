@@ -238,12 +238,19 @@ async def freeze(
         raise HTTPException(422, f"A freeze lasts at most {s.max_freeze_days} days")
     now = res.clock()
     fresh = await res.db.users.find_one({"_id": user["_id"]}) or user
-    if fresh.get("freeze_until"):  # end the running (or expired) freeze first: forgive the paused time
-        await settle_freeze(res.db, fresh, min(now, fresh["freeze_until"]))
+    running = fresh.get("freeze_until")
+    if body.days > 0:
+        # Quota check first, counting the running freeze as ended now, so a refused request changes nothing.
+        past = list(fresh.get("freeze_log", []))
+        started = fresh.get("freeze_started_at")
+        if running and started is not None and min(now, running) > started:
+            past.append({"start": started, "end": min(now, running)})
+        if not quota_ok(past, now, body.days, s.freeze_quota_days, s.freeze_window_days):
+            raise HTTPException(409, f"At most {s.freeze_quota_days} frozen days in any {s.freeze_window_days} days")
+    if running:  # end the running (or expired) freeze: forgive the paused time
+        await settle_freeze(res.db, fresh, min(now, running))
     if body.days == 0:
         return FreezeResponse(freeze_until=None)
-    if not quota_ok(fresh.get("freeze_log", []), now, body.days, s.freeze_quota_days, s.freeze_window_days):
-        raise HTTPException(409, f"At most {s.freeze_quota_days} frozen days in any {s.freeze_window_days} days")
     await rebase_for_freeze(res.db, user["_id"], now)  # decay that already happened stays
     until = now + body.days * DAY_MS
     await res.db.users.update_one({"_id": user["_id"]}, {"$set": {"freeze_until": until, "freeze_started_at": now}})
@@ -277,6 +284,7 @@ async def report(
             "target_id": body.target_id,
             "reason": body.reason,
             "created_at": res.clock(),
+            "expire_at": expiry(res, res.settings.reports_retention_days),  # TTL index purges it
             "state": "open",
         }
     )

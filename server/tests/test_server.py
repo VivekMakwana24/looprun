@@ -226,8 +226,8 @@ def test_implausible_loop_is_held_for_review(client):
     held = run_loop(client, hs["bob"], lat=50.5, side_m=500)
     assert held["status"] == "pending_review" and held["cells_claimed"] == 0
     assert any(f["code"] == "implausible_loop" for f in held["flags"])
-    names = [e["user"]["name"] for e in client.get("/v1/leaderboard/weekly", headers=hdr(hs["alice"])).json()["entries"]]
-    assert names == ["alice"]
+    board = client.get("/v1/leaderboard/weekly", headers=hdr(hs["alice"])).json()["entries"]
+    assert [e["user"]["name"] for e in board] == ["alice"]
     assert cells_of(client, hs["bob"], bbox="8.6,50.4,8.8,50.6") == []
 
 

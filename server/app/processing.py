@@ -1,13 +1,15 @@
 """Run processing (engine -> cells, cell power, ownership) and account deletion.
 
-Everything that changes ownership runs under the claims lock (locks.RedisLock). Processing is idempotent:
-the claim for a run is first *planned* and stored in `run_claims` (absolute new values per cell), then applied
-with guarded absolute writes, so a redelivered task can never add credit twice.
+Everything that changes ownership runs under locks (locks.LockSet: one per user, one per H3 res-5 region).
+Processing is idempotent: the claim for a run is first *planned* and stored in `run_claims`
+(absolute new values per cell), then applied with guarded absolute writes, so a redelivered task can never
+add credit twice.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -15,10 +17,10 @@ from pymongo.errors import DuplicateKeyError
 
 from . import engine_adapter as eng
 from .cellview import change_fields
-from .errors import RETRYABLE
+from .errors import RETRYABLE, LockTimeout
 from .events import publish_changes, publish_user_deleted
 from .freeze import settle_expired
-from .locks import RedisLock
+from .locks import REGION_RES, LockSet, region_key, user_key
 from .resources import Resources
 
 log = logging.getLogger("looprun.processing")
@@ -128,7 +130,11 @@ async def _process(res: Resources, run: dict) -> None:
 
 async def _claim_cells(res: Resources, run: dict, processed: eng.ProcessedRun, credit: float) -> dict | None:
     s = res.settings
-    async with RedisLock(res.redis, ttl_s=s.processing_lock_seconds, wait_s=s.processing_lock_wait_seconds) as lock:
+    # Lock order: the user's lock first (serialises with that user's account deletion), then one lock per H3
+    # resolution-5 region of the claimed cells, sorted. Runs in different regions do not wait for each other.
+    regions = sorted({eng.region_of(c, REGION_RES) for c in processed.cells})
+    keys = [user_key(run["user_id"]), *(region_key(r) for r in regions)]
+    async with LockSet(res.redis, keys, ttl_s=s.processing_lock_seconds, wait_s=s.processing_lock_wait_seconds) as lock:
         user = await res.db.users.find_one({"_id": run["user_id"]})
         if user is None or user.get("deleting"):  # re-checked inside the lock: DELETE /me may have started
             return {"skipped": True, "claimed": 0, "taken": 0, "changes": []}
@@ -229,14 +235,57 @@ async def _apply(db: Any, user_id: str, o: dict) -> None:
 
 
 # ------------------------------------------------------------------ account deletion
+DELETE_ATTEMPTS = 5
+
+
+async def _user_regions(db: Any, user_id: str) -> list[str]:
+    """Regions holding anything of this user: power rows, and cells they own or show (a half-finished earlier
+    attempt may already have deleted the power rows while cells still point at the user)."""
+    cells: set[str] = set()
+    async for d in db.cell_power.find({"user_id": user_id}, {"cell": 1}):
+        cells.add(d["cell"])
+    q = {"$or": [{"owner_id": user_id}, {"public_owner_id": user_id}, {"pending_owner_id": user_id}]}
+    async for d in db.cells.find(q, {"_id": 1}):
+        cells.add(d["_id"])
+    return sorted({eng.region_of(c, REGION_RES) for c in cells})
+
+
 async def delete_account(res: Resources, user_id: str) -> None:
-    """Resumable account deletion. Order: mark `deleting` (no new claims/uploads) -> under the claims lock hand
-    over/clear cells and delete cell_power -> runs, fixes, claim plans, reports -> the user document LAST.
-    Any failure leaves the user in `deleting`, and calling this again finishes the job."""
+    """Resumable account deletion.
+
+    1. mark the user `deleting`: no new uploads, and workers skip claiming for them (re-checked inside the lock);
+    2. take the user's lock (waits for a claim in flight), then the region locks of everything they hold
+       (bounded wait, a few attempts); hand over / clear their cells and delete their cell_power;
+    3. delete runs, raw fixes, claim plans and the reports they filed;
+    4. delete the user document LAST.
+    Any failure leaves the user in `deleting`; the token still works for DELETE /me, so calling it again finishes.
+    """
     db, s = res.db, res.settings
     await db.users.update_one({"_id": user_id}, {"$set": {"deleting": True}})
-    async with RedisLock(res.redis, ttl_s=s.processing_lock_seconds, wait_s=s.delete_lock_wait_seconds) as lock:
-        changes = await _reassign_cells(res, user_id, lock)
+    await publish_user_deleted(res.redis, user_id)  # open WebSockets of this user close now
+    changes: list[dict] = []
+    ukey = user_key(user_id)
+    async with LockSet(
+        res.redis, [ukey], ttl_s=s.processing_lock_seconds, wait_s=s.delete_lock_wait_seconds
+    ) as user_lock:
+        # With the user lock held no claim of theirs is in flight and none can start (they see `deleting`),
+        # so the regions found below are stable. Their locks are taken on top, in sorted order.
+        for attempt in range(DELETE_ATTEMPTS):
+            keys = [region_key(r) for r in await _user_regions(db, user_id)]
+            try:
+                async with LockSet(
+                    res.redis, keys, ttl_s=s.processing_lock_seconds, wait_s=s.delete_lock_wait_seconds
+                ) as region_locks:
+
+                    def still_held(a=user_lock, b=region_locks) -> None:
+                        a.check()
+                        b.check()
+
+                    changes = await _reassign_cells(res, user_id, still_held)
+                break
+            except LockTimeout:
+                if attempt == DELETE_ATTEMPTS - 1:
+                    raise
     await db.run_fixes.delete_many({"user_id": user_id})
     await db.run_claims.delete_many({"user_id": user_id})
     await db.runs.delete_many({"user_id": user_id})
@@ -247,7 +296,7 @@ async def delete_account(res: Resources, user_id: str) -> None:
     log.info("account_deleted", extra={"cells_reassigned": len(changes)})
 
 
-async def _reassign_cells(res: Resources, user_id: str, lock: RedisLock) -> list[dict]:
+async def _reassign_cells(res: Resources, user_id: str, check: Callable[[], None]) -> list[dict]:
     """Give each cell the user owned (or showed) to the strongest remaining user by faded power, else drop it."""
     db = res.db
     now = res.clock()
@@ -266,7 +315,7 @@ async def _reassign_cells(res: Resources, user_id: str, lock: RedisLock) -> list
             break
     freezes = await active_freezes(db, {d["user_id"] for ds in powers.values() for d in ds}, now)
     for doc in affected:
-        lock.check()
+        check()
         cid = doc["_id"]
         best, best_p = None, -1.0
         for d in powers[cid]:

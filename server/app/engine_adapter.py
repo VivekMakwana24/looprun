@@ -117,6 +117,11 @@ def grid_disk(cell: str, k: int) -> list[str]:
     return list(h3.grid_disk(cell, k))
 
 
+def region_of(cell: str, res: int = 5) -> str:
+    """The H3 resolution-5 parent of a cell: the unit the claim locks are keyed on."""
+    return h3.cell_to_parent(cell, res)
+
+
 def grace_days() -> float:
     return float(engine().Config().grace_days)
 

@@ -32,7 +32,9 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Session"}
-        "401": {description: Invalid token}
+        "401": {description: Invalid Google ID token (or dev token while dev auth is off)}
+        "422": {description: Validation error}
+        "503": {description: Google sign-in is not configured on the server}
   /runs:
     post:
       summary: Upload a finished run (idempotent on id)
@@ -47,9 +49,13 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/RunStatus"}
-        "413": {description: Too many fixes or payload too large}
-        "422": {description: Validation error}
-        "429": {description: Rate limited}
+        "401": {description: Missing, invalid or expired token (or the user no longer exists)}
+        "403": {description: The account is being deleted; uploads are refused}
+        "409": {description: The run id already belongs to another user}
+        "413": {description: Too many fixes (more than 20000) or request body too large (also when sent chunked)}
+        "422": {description: "Validation error: also NaN/Infinity and numbers outside the allowed range (times must be before year 2100)"}
+        "429": {description: Rate limited; the Retry-After header says how many seconds to wait}
+        "503": {description: Queue unavailable; nothing was stored, retry with the same id}
   /runs/{id}:
     get:
       summary: Status and result of a run
@@ -60,7 +66,9 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/RunStatus"}
+        "401": {description: Missing, invalid or expired token}
         "404": {description: Unknown run or not yours}
+        "422": {description: The id is not a UUID}
   /cells:
     get:
       summary: Claimed cells inside a bounding box
@@ -80,10 +88,16 @@ paths:
                   cells:
                     type: array
                     items: {$ref: "#/components/schemas/Cell"}
+        "401": {description: Missing, invalid or expired token}
+        "422": {description: Malformed bbox, or larger than 0.2 degrees on a side}
   /leaderboard/weekly:
     get:
       summary: Cells held, ranked, for the current ISO week
+      description: >
+        Counts only ownership that is already published (same delay as GET /cells shows other people);
+        the caller additionally sees their own entry at once.
       responses:
+        "401": {description: Missing, invalid or expired token}
         "200":
           content:
             application/json:
@@ -121,6 +135,8 @@ paths:
                       radius_m: {type: number, minimum: 50, maximum: 1000}
       responses:
         "204": {description: Saved}
+        "401": {description: Missing, invalid or expired token}
+        "422": {description: More than 5 zones, radius outside 50..1000 m, or coordinates out of range}
   /me/freeze:
     post:
       summary: Start (days>0) or end (days=0) a decay freeze; at most 30 days
@@ -133,6 +149,9 @@ paths:
               required: [days]
               properties:
                 days: {type: integer, minimum: 0, maximum: 30}
+      description: >
+        At most 30 frozen days in any rolling 90 days. Starting a freeze fixes the decay that has already happened
+        (a freeze cannot bring faded power back). Ending a freeze (days=0) forgives the paused time.
       responses:
         "200":
           content:
@@ -141,11 +160,20 @@ paths:
                 type: object
                 properties:
                   freeze_until: {type: integer, nullable: true}
+        "401": {description: Missing, invalid or expired token}
+        "409": {description: The 30-days-in-90 quota would be exceeded; nothing was changed}
+        "422": {description: days outside 0..30}
   /me:
     delete:
       summary: Delete the account, its runs and its cell power
+      description: >
+        Resumable. The account is first marked "deleting" (new uploads get 403), cells it held pass to the
+        strongest remaining player or become free, then everything is deleted and the user last. If the server is
+        busy it answers 503 and the call can simply be repeated with the same token.
       responses:
         "204": {description: Deleted}
+        "401": {description: Missing, invalid or expired token, or the account is already deleted}
+        "503": {description: Busy; repeat the request (see Retry-After)}
   /reports:
     post:
       summary: Report a run or a cell
@@ -162,13 +190,21 @@ paths:
                 reason: {type: string, maxLength: 500}
       responses:
         "202": {description: Recorded}
+        "401": {description: Missing, invalid or expired token}
+        "422": {description: Validation error}
+        "429": {description: Rate limited (20 per hour)}
   /live:
     get:
       summary: WebSocket (upgrade) that pushes cell ownership changes in a bbox
       description: >
-        Connect to /v1/live?bbox=minLng,minLat,maxLng,maxLat&token=<access_token>.
-        Server sends JSON text frames {"type":"cell_changed","cell":"<h3>","lat":number,"lng":number,"owner":UserRef|null,"mine":bool}.
-        Hidden cells are never sent with an owner.
+        Connect to /v1/live?bbox=minLng,minLat,maxLng,maxLat and, as the FIRST message, send
+        {"type":"auth","token":"<access_token>"} within 10 seconds. Clients should prefer this form: a token in the
+        URL (the older `&token=<access_token>` query parameter, still accepted) ends up in proxy and access logs.
+        A missing, invalid or expired token, or a user that no longer exists, closes the socket with code 4401; a bad
+        bbox closes it with 1008. Sockets of a user that is deleted are closed with 4401.
+        Server sends JSON text frames {"type":"cell_changed","cell":"<h3>","lat":number,"lng":number,"owner":UserRef|null,"mine":bool}
+        (lat,lng = cell centre). Other people's changes arrive after the publish delay. Hidden cells are never sent
+        with an owner.
       responses:
         "101": {description: Switching protocols}
 components:

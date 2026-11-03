@@ -205,7 +205,9 @@ def with_result(when, **changes):
             r = inner.process_run(fixes, *a, **k)
             if not when(fixes):
                 return r
-            d = dict(distance_m=r.distance_m, moving_seconds=r.moving_seconds, loops=r.loops, cells=r.cells, flags=r.flags)
+            d = dict(
+                distance_m=r.distance_m, moving_seconds=r.moving_seconds, loops=r.loops, cells=r.cells, flags=r.flags
+            )
             d.update(changes)
             return types.SimpleNamespace(**d)
 
