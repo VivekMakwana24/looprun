@@ -11,9 +11,10 @@ Path: **Policy and programs > App content > Data safety**.
 | Does your app collect or share any of the required user data types? | **Yes** |
 | Is all of the user data collected by your app encrypted in transit? | **Yes, for release builds only.** The release workflow now refuses a non-`https://` `API_BASE_URL`. Debug builds default to cleartext emulator loopback; do not submit those. |
 | Account creation methods | **OAuth** (Google sign-in) |
-| Do you provide a way for users to request that their data be deleted? | **Yes** (in-app Profile > Delete account; email) |
+| Do you provide a way for users to request that their data be deleted? | **Yes** (in-app Profile > Delete account; email). Deletion removes the account, runs, raw GPS, home zones, cell power and filed reports (resumable two-step flow); cells pass to the strongest remaining player or become free. |
 | Account deletion URL | [ACCOUNT_DELETION_URL] (does not exist yet; the privacy policy section "Deleting your account" can serve once hosted) |
 | Delete some data without deleting the account? | Home zones can be cleared in the app; runs cannot be deleted individually. |
+| Data retention (not asked as a field, but must match the policy) | Raw GPS of accepted runs: deleted right after processing. Held or failed runs: 30 days, then automatic deletion. Reports: 180 days. Everything else until the account is deleted. Backups: 14 days. |
 
 ## Section 2: Data types (tick only these)
 

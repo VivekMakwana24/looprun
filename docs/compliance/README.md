@@ -27,14 +27,13 @@ Everything here is a draft written from the code as of 2026-11-03 (verifier repo
 | `[TEST_START]`, `[TEST_END]` | First and last day of the 14-day test | tester-guide |
 | `[FEEDBACK_CHANNEL]` | Where testers send bug reports besides email | tester-guide |
 
-Values that are facts and not placeholders: owner-name delay on the map is 30 minutes (server default `publish_delay_seconds` = 1800; production compose does not override it); backups are kept 14 days (`deploy/backup.sh`, `KEEP_DAYS`).
+Values that are facts and not placeholders: owner-name delay on the map is 30 minutes (server default `publish_delay_seconds` = 1800; production compose does not override it); backups are kept 14 days (`deploy/backup.sh`, `KEEP_DAYS`); raw GPS of held/rejected/failed runs expires after 30 days (`LOOPRUN_FIXES_RETENTION_DAYS`, TTL index on `run_fixes`); reports expire after 180 days (TTL index on `reports`). If you change these settings, change the privacy policy too.
 
 ## Not in this build (do not advertise or test these yet)
 
 - Reporting a run or a cell (the server has `POST /v1/reports`; the app has no report screen).
 - Live map updates over WebSocket (`/v1/live`; the app does not connect to it). The map refreshes when you move or zoom it.
 - Firebase, Crashlytics and Play Integrity (planned; the app sends no crash reports and sends `integrity_token` as null).
-- Raw GPS purge after 90 days (proposal; not implemented).
 - A Stop button inside the run notification (Stop is inside the app).
 - A link to the privacy policy inside the in-app disclosure screen.
 - iOS.

@@ -63,6 +63,18 @@ docker compose -f docker-compose.prod.yml down                       # stop all 
 
 Containers use `restart: unless-stopped`, so they come back after a reboot as long as the Docker service is enabled (the setup script does that).
 
+## 4a. Data retention and account deletion (operational facts)
+
+- Raw GPS: accepted runs are deleted right after processing. Held, rejected and processing-error runs keep their points for 30 days (`LOOPRUN_FIXES_RETENTION_DAYS`) via a MongoDB TTL index on `run_fixes.expire_at`. Reports expire after 180 days (TTL index on `reports.expire_at`). The Mongo TTL monitor runs about once a minute, so removal is not instant. Indexes are created at API start-up.
+- Changing a retention value does not shorten documents already stored (`expire_at` is written at insert); keep `docs/compliance/privacy-policy.md` in step with any change.
+- `DELETE /v1/me` is a resumable two-step flow: the user is marked `deleting` (all other routes answer 403, uploads stop, sockets close), then data is removed, user document last. A lock timeout gives 503 with Retry-After and leaves the user in `deleting`; the same token can call `DELETE /v1/me` again. To find stuck deletions: `db.users.find({deleting: true})`.
+- Held runs (hard flags and `implausible_loop`) have no cells and no power until reviewed. There is no review tool; review is manual in MongoDB.
+- Backups taken before an expiry or deletion still contain that data for up to 14 days (`deploy/backup.sh`).
+
+## 4b. Reverse proxy and logs
+
+`deploy/Caddyfile` limits request bodies to 8 MiB (matching the server's own cap) and writes access logs through a filter that replaces the `token` query parameter and the `Authorization` header with `REDACTED`, so WebSocket `?token=` values and bearer tokens do not reach disk. Validated with `caddy validate` and a local request test (Caddy 2.8.4); not tested behind the real proxy chain. The preferred WebSocket auth is the first message `{"type":"auth","token":...}`, which never appears in a URL.
+
 ## 5. Backups
 
 `deploy/backup.sh` runs `mongodump --archive --gzip` inside the mongo container and writes `/var/backups/looprun/mongo-<UTC timestamp>.archive.gz`, deleting archives older than 14 days (`KEEP_DAYS`). The setup script installs it as `/etc/cron.d/looprun-backup` (daily 03:15 server time, log in `/var/log/looprun-backup.log`).
@@ -144,7 +156,7 @@ Other release steps: bump `version:` in `mobile/pubspec.yaml` (build number must
 
 ## 10. CI overview
 
-`.github/workflows/ci.yml` runs on every push and PR: Python (ruff, pytest for engine and server; the server tests use `fakeredis` and `mongomock-motor`, so CI does **not** exercise a real Redis or MongoDB), Flutter (bootstrap, pub get, build_runner, analyze, test, debug APK uploaded as `looprun-debug-apk`), Docker (image build, `docker compose config` on both compose files with dummy values; nothing is pushed). Local equivalents: `make lint`, `make test`, `make build`.
+`.github/workflows/ci.yml` runs on every push and PR: Python (ruff, pytest for engine and server; these use `fakeredis` and `mongomock-motor`), Integration (a separate job: `pytest server -m integration` against real `mongo:7` and `redis:7-alpine` service containers; it fails if the test was skipped instead of run), Flutter (bootstrap, pub get, build_runner, analyze, test, debug APK uploaded as `looprun-debug-apk`), Docker (image build, `docker compose config` on both compose files with dummy values; nothing is pushed). Local equivalents: `make lint`, `make test`, `make build`.
 
 ## 11. Known gaps
 

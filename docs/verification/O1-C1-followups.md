@@ -3,9 +3,9 @@
 Written by the DevOps/Compliance builder in response to `docs/verification/O1-C1.md`.
 
 ## Server lane
-1. **Purge raw GPS of runs held for review** (policy proposal: after 90 days). Add a TTL index on a purge-date field, or a periodic Celery task that `$unset`s `fixes` (finding 5). The privacy policy says "proposal, not yet implemented" until this exists.
-2. **Purge old reports** (proposal: 12 months), same mechanism.
-3. **Real-service integration tests.** Server tests use fakeredis/mongomock; add a small suite that honours `LOOPRUN_MONGO_URL` / `LOOPRUN_REDIS_URL` (unique indexes, Celery against real Redis). When it exists, re-add the `redis` and `mongo` service containers to `ci.yml` python job (removed because nothing used them) (finding 14).
+1. **DONE (server fix wave):** TTL purge of raw GPS (30 days) exists. Original text: purge raw GPS of runs held for review. Add a TTL index on a purge-date field, or a periodic Celery task that `$unset`s `fixes` (finding 5). The privacy policy says "proposal, not yet implemented" until this exists.
+2. **DONE:** reports expire after 180 days (TTL index).
+3. **DONE (DevOps):** `server/tests/test_integration_real_services.py` and CI job `integration`. Not yet run against a real MongoDB by the author. Original text: real-service integration tests. Server tests use fakeredis/mongomock; add a small suite that honours `LOOPRUN_MONGO_URL` / `LOOPRUN_REDIS_URL` (unique indexes, Celery against real Redis). When it exists, re-add the `redis` and `mongo` service containers to `ci.yml` python job (removed because nothing used them) (finding 14).
 4. **Display name**: decide if the stored name should be Google's `given_name` (current) or a user-chosen name; it is shown to other players (finding 7).
 5. Server-side minimum for `LOOPRUN_JWT_SECRET` (reject short or `CHANGE_ME` values), as defence in depth (finding 13).
 

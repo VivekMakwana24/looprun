@@ -24,12 +24,12 @@ The app never reads your location in the background when no run is active, and i
 | Data | Stored on our server? | Why |
 | --- | --- | --- |
 | **Run results**: start and end time, distance, moving time, outlines of the loops you closed, cells claimed, review flags | Yes | Show results, update the map and the weekly leaderboard |
-| **Raw GPS points of a run** (position, time, accuracy, mock-location flag) | Used to process the run. After processing, they are **deleted for normal runs**. For runs held for review (for example flagged as vehicle speed, teleporting or mock location), the points are **kept** for a human check. See retention below. | Work out loops and cells; detect cheating |
+| **Raw GPS points of a run** (position, time, accuracy, mock-location flag) | Used to process the run. **Deleted right after processing for accepted runs.** For runs held for review (for example flagged as vehicle speed, teleporting, mock location or an implausible loop) or that failed processing, the points are **kept for 30 days** and then deleted automatically. See retention below. | Work out loops and cells; detect cheating |
 | **Home zones** (centre point and radius, up to five) | Yes. A centre point is a precise location, usually your home; we store it. | So that your name never shows on cells in those zones |
 | **Account data from Google sign-in**: Google account ID and display name (Google's first name if present, otherwise the full name, at most 40 characters) | Yes | Create and recognise your account; the name is shown to other players |
 | **Your Google email address** | **No.** It is part of the Google sign-in token our server checks, but we do not store it. | Sign-in |
 | **The map area you are viewing** (a bounding box, not your position) | Sent with each request to load cells; it is not stored as a history, but may appear in server access logs | Show claimed cells |
-| **Reports you send** | The server can store them, but the app does not offer reporting yet | Abuse review |
+| **Reports you send** | The server can store them (they are deleted automatically after 180 days), but the app does not offer reporting yet | Abuse review |
 
 We do not collect your contacts, photos, microphone or camera, and we do not use advertising identifiers. The app does not yet send crash reports or analytics.
 
@@ -46,7 +46,8 @@ We do not sell your data, show ads or share your data with advertisers.
 
 - Your **display name** appears on the weekly leaderboard and, on the map, as the owner of cells you hold. A cell shows its owner's name only if enough different players are active nearby (currently at least 3); otherwise the owner is hidden.
 - Cells inside any of your home zones never show you as the owner.
-- **Delayed publishing:** when you take a cell, other players see the change after 30 minutes (you see it at once). Leaderboard totals are not delayed.
+- **Delayed publishing:** when you take a cell, other players see the change after 30 minutes (you see it at once). The weekly leaderboard counts only ownership that has already been published, so it lags in the same way (your own entry is shown to you live).
+- Runs held for review (for example flagged as too fast, or with an implausible loop) claim no cells until they are reviewed.
 - Other players cannot see your route, GPS points or run times.
 
 ## Legal basis (GDPR) **[PROPOSAL, lawyer to confirm]**
@@ -60,15 +61,15 @@ We do not sell your data, show ads or share your data with advertisers.
 What the server does today:
 
 - Raw GPS points of normal (accepted) runs: removed right after processing.
-- Raw GPS points of runs held for review: kept until you delete your account. **This is longer than we want. Proposal: delete them after 90 days. Not yet implemented.**
+- Raw GPS points of runs held for review, rejected, or that failed processing: deleted automatically **30 days** after upload (a database expiry index; the database checks about once a minute, so deletion is not to the second).
 - Run results, loop outlines, cell power and ownership: until you delete your account.
 - Home zones: until you change them or delete your account.
-- Reports: until the reporter deletes their account (**proposal: purge after 12 months, not yet implemented**).
-- Server backups: kept 14 days, so deleted data can remain in a backup for up to that long.
+- Reports: deleted automatically **180 days** after they were filed, or earlier when the person who filed them deletes their account. Reports filed *about* you by others are not removed when you delete your account; they expire after the 180 days.
+- Server backups: kept 14 days, so deleted or expired data can remain in a backup for up to that long.
 
 ## Deleting your account
 
-In the app: Profile > Delete account. This permanently deletes your account, your runs, your home zones, your cell power and the reports you filed. Cells you owned are **handed to the strongest remaining player in that cell**, or become free if nobody else has any power there; your name is removed from them. Backups are overwritten within 14 days. You can also write to [CONTACT_EMAIL] from the address you use with Google and we will do it for you. Instructions are also available at [ACCOUNT_DELETION_URL].
+In the app: Profile > Delete account. Deletion runs in two steps so that it can be resumed if something interrupts it: first your account is marked as being deleted (it can no longer upload runs or use the app, and open live connections are closed), then your cell power, runs, raw GPS, run processing records, the reports you filed and finally the account record itself are removed. If a step is interrupted you can simply repeat the request and it finishes. Your home zones are part of the account record and go with it. Cells you owned are **handed to the strongest remaining player in that cell**, or become free if nobody else has any power there; your name is removed from them. Backups are overwritten within 14 days. You can also write to [CONTACT_EMAIL] from the address you use with Google and we will do it for you. Instructions are also available at [ACCOUNT_DELETION_URL].
 
 ## Your rights
 

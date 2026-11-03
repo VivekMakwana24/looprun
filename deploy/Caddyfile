@@ -3,15 +3,34 @@
 # and ports 80 and 443 are open in the Lightsail firewall.
 {$LOOPRUN_DOMAIN} {
 	encode zstd gzip
+
+	# Same ceiling as the server's own cap (8 MiB, server/app/config.py max_body_bytes).
+	# Larger bodies get 413 from Caddy before they reach the API.
+	request_body {
+		max_size 8MiB
+	}
+
 	# WebSocket upgrades (/v1/live) pass through reverse_proxy automatically.
 	reverse_proxy api:8000
+
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		-Server
 	}
+
+	# Access log. The WebSocket may authenticate with ?token=<access_token>, and bearer tokens must never be
+	# written to disk, so the log filter replaces the query parameter and the Authorization header.
 	log {
 		output stdout
-		format console
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					replace token REDACTED
+				}
+				request>headers>Authorization replace REDACTED
+			}
+		}
 	}
 }

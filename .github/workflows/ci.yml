@@ -15,8 +15,6 @@ jobs:
   python:
     name: Python (ruff + pytest)
     runs-on: ubuntu-latest
-    # Server tests use fakeredis and mongomock-motor (see server/tests/conftest.py); no real
-    # Redis or MongoDB is needed until integration tests exist (docs/verification/O1-C1-followups.md).
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,6 +34,52 @@ jobs:
         run: python -m pytest engine
       - name: Server tests
         run: python -m pytest server
+
+  integration:
+    name: Integration (server vs real MongoDB and Redis)
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 20s
+    env:
+      LOOPRUN_MONGO_URL: mongodb://localhost:27017/looprun_test
+      LOOPRUN_REDIS_URL: redis://localhost:6379/15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            engine/pyproject.toml
+            server/pyproject.toml
+      - name: Install packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install ./engine "./server[test]"
+      - name: Integration tests (fail if none ran)
+        run: |
+          python -m pytest server -m integration -rA | tee integration.log
+          if grep -qE '[0-9]+ skipped' integration.log && ! grep -qE '[0-9]+ passed' integration.log; then
+            echo "::error::integration tests were skipped, not run"; exit 1
+          fi
 
   flutter:
     name: Flutter (analyze, test, debug APK)

@@ -40,6 +40,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = ["integration: needs real MongoDB and Redis (LOOPRUN_MONGO_URL and LOOPRUN_REDIS_URL); skipped otherwise"]
 
 [tool.ruff]
 line-length = 120
