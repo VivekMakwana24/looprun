@@ -20,7 +20,12 @@ def test_dev_auth_flow(client):
     assert a["_uid"] == again["_uid"]
     assert login(client, "bob")["_uid"] != a["_uid"]
     assert client.get("/v1/cells", params={"bbox": "8.6,49.9,8.7,50.0"}).status_code == 401
-    assert client.get("/v1/cells", params={"bbox": "8.6,49.9,8.7,50.0"}, headers={"Authorization": "Bearer junk"}).status_code == 401
+    assert (
+        client.get(
+            "/v1/cells", params={"bbox": "8.6,49.9,8.7,50.0"}, headers={"Authorization": "Bearer junk"}
+        ).status_code
+        == 401
+    )
     assert client.post("/v1/auth/google", json={"id_token": "dev:bad name!"}).status_code == 401
     assert client.post("/v1/auth/google", json={"id_token": "nonsense"}).status_code in (401, 503)
 
@@ -219,7 +224,9 @@ def test_leaderboard_excludes_implausible_loop_awaiting_review(client):
     run_loop(client, hs["alice"], lat=50.0, side_m=300)
     flagged = run_loop(client, hs["bob"], lat=50.5, side_m=500)
     assert flagged["status"] == "accepted" and any(f["code"] == "implausible_loop" for f in flagged["flags"])
-    names = [e["user"]["name"] for e in client.get("/v1/leaderboard/weekly", headers=hdr(hs["alice"])).json()["entries"]]
+    names = [
+        e["user"]["name"] for e in client.get("/v1/leaderboard/weekly", headers=hdr(hs["alice"])).json()["entries"]
+    ]
     assert names == ["alice"]
 
 
@@ -243,11 +250,21 @@ def test_delete_me_reassigns_and_clears(client):
 
 def test_reports(client):
     h = login(client, "alice")
-    ok = client.post("/v1/reports", json={"kind": "run", "target_id": "x", "reason": "looks like a car"}, headers=hdr(h))
+    ok = client.post(
+        "/v1/reports", json={"kind": "run", "target_id": "x", "reason": "looks like a car"}, headers=hdr(h)
+    )
     assert ok.status_code == 202
     assert db_run(client, lambda db: db.reports.count_documents({})) == 1
-    assert client.post("/v1/reports", json={"kind": "user", "target_id": "x", "reason": "r"}, headers=hdr(h)).status_code == 422
-    assert client.post("/v1/reports", json={"kind": "cell", "target_id": "x", "reason": "r" * 501}, headers=hdr(h)).status_code == 422
+    assert (
+        client.post("/v1/reports", json={"kind": "user", "target_id": "x", "reason": "r"}, headers=hdr(h)).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/v1/reports", json={"kind": "cell", "target_id": "x", "reason": "r" * 501}, headers=hdr(h)
+        ).status_code
+        == 422
+    )
 
 
 # ------------------------------------------------------------------ websocket
@@ -276,3 +293,34 @@ def test_websocket_rejects_bad_token_and_big_bbox(client):
     tok = h["Authorization"].split()[1]
     with pytest.raises(WebSocketDisconnect), client.websocket_connect(f"/v1/live?bbox=8,49,9,51&token={tok}"):
         pass
+
+
+# ------------------------------------------------------------------ freeze settlement (engine/NOTES.md #10)
+def test_ending_a_freeze_shifts_updated_at_by_frozen_time(client, clock):
+    a, b = login(client, "alice"), login(client, "bob")
+    run_loop(client, a)
+    t_run = clock.now
+    client.post("/v1/me/freeze", json={"days": 30}, headers=hdr(a))
+    clock.advance(days=20)
+    assert client.post("/v1/me/freeze", json={"days": 0}, headers=hdr(a)).json() == {"freeze_until": None}
+    stamps = db_run(client, lambda db: db.cell_power.distinct("updated_at", {"user_id": a["_uid"]}))
+    assert stamps == [t_run + 20 * 86_400_000]
+    clock.advance(days=5)  # 5 days since the freeze ended: still inside the grace period
+    assert run_loop(client, b)["cells_claimed"] == 0
+
+
+def test_expired_freeze_is_settled_lazily(client, clock):
+    a, b = login(client, "alice"), login(client, "bob")
+    run_loop(client, a)
+    client.post("/v1/me/freeze", json={"days": 10}, headers=hdr(a))
+    clock.advance(days=10)  # freeze just ran out; nobody called days=0
+    assert run_loop(client, b)["cells_claimed"] == 0  # alice's 10 frozen days were not held against her
+    u = db_run(client, lambda db: db.users.find_one({"_id": a["_uid"]}))
+    assert u["freeze_until"] is None
+
+
+def test_without_freeze_same_gap_loses_cells(client, clock):
+    a, b = login(client, "alice"), login(client, "bob")
+    run_loop(client, a)
+    clock.advance(days=10 + 10)
+    assert run_loop(client, b)["cells_claimed"] > 0

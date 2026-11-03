@@ -7,11 +7,10 @@ import logging
 import uuid
 from typing import Any
 
-from pymongo import UpdateOne
-
 from . import engine_adapter as eng
 from .cellview import change_fields
 from .events import invalidate_leaderboard, publish_changes
+from .freeze import settle_expired
 from .resources import Resources
 
 log = logging.getLogger("looprun.processing")
@@ -115,9 +114,14 @@ async def _claim_cells(res: Resources, run: dict, processed: eng.ProcessedRun) -
     token = await _acquire(res.redis, s.processing_lock_seconds)
     try:
         now = res.clock()
-        powers: dict[str, dict[str, tuple[float, int]]] = {c: {} for c in cells}
-        async for d in db.cell_power.find({"cell": {"$in": cells}}):
-            powers[d["cell"]][d["user_id"]] = (d["power"], d["updated_at"])
+        powers: dict[str, dict[str, tuple[float, int]]] = {}
+        for _attempt in range(2):
+            powers = {c: {} for c in cells}
+            async for d in db.cell_power.find({"cell": {"$in": cells}}):
+                powers[d["cell"]][d["user_id"]] = (d["power"], d["updated_at"])
+            involved = {u for p in powers.values() for u in p} | {user_id}
+            if not await settle_expired(db, involved, now):
+                break
         cell_docs = {d["_id"]: d async for d in db.cells.find({"_id": {"$in": cells}})}
         freezes = await active_freezes(db, {u for p in powers.values() for u in p} | {user_id}, now)
 
@@ -130,9 +134,7 @@ async def _claim_cells(res: Resources, run: dict, processed: eng.ProcessedRun) -
             current = doc["owner_id"] if doc else None
             out = eng.apply_claim(cell, powers[cell], current, user_id, credit, now, freezes)
             p, t = out.powers[user_id]
-            ops.append(
-                UpdateOne({"cell": cell, "user_id": user_id}, {"$set": {"power": p, "updated_at": t}}, upsert=True)
-            )
+            ops.append(({"cell": cell, "user_id": user_id}, {"$set": {"power": p, "updated_at": t}}, True))
             final_owner = out.new_owner
             if final_owner == user_id:
                 claimed += 1
@@ -141,15 +143,14 @@ async def _claim_cells(res: Resources, run: dict, processed: eng.ProcessedRun) -
                     taken += 1
                 lat, lng = eng.cell_centre(cell)
                 fields = change_fields(doc, final_owner, now, delay_ms, run_id)
-                cell_ops.append(
-                    UpdateOne({"_id": cell}, {"$set": fields, "$setOnInsert": {"lat": lat, "lng": lng}}, upsert=True)
-                )
+                cell_ops.append(({"_id": cell}, {"$set": fields, "$setOnInsert": {"lat": lat, "lng": lng}}, True))
                 changes.append({"cell": cell, "new_owner": final_owner, "reveal_at": now + delay_ms})
             elif final_owner == user_id and doc is not None:
-                cell_ops.append(UpdateOne({"_id": cell}, {"$set": {"owner_run_id": run_id}}))
-        await db.cell_power.bulk_write(ops, ordered=False)
-        if cell_ops:
-            await db.cells.bulk_write(cell_ops, ordered=False)
+                cell_ops.append(({"_id": cell}, {"$set": {"owner_run_id": run_id}}, False))
+        for f, u, up in ops:
+            await db.cell_power.update_one(f, u, upsert=up)
+        for f, u, up in cell_ops:
+            await db.cells.update_one(f, u, upsert=up)
     finally:
         await _release(res.redis, token)
     return claimed, taken, changes
@@ -172,9 +173,13 @@ async def reassign_after_delete(res: Resources, user_id: str) -> list[dict]:
             )
         ]
         ids = [d["_id"] for d in affected]
-        powers: dict[str, list[dict]] = {c: [] for c in ids}
-        async for d in db.cell_power.find({"cell": {"$in": ids}}):
-            powers[d["cell"]].append(d)
+        powers: dict[str, list[dict]] = {}
+        for _attempt in range(2):
+            powers = {c: [] for c in ids}
+            async for d in db.cell_power.find({"cell": {"$in": ids}}):
+                powers[d["cell"]].append(d)
+            if not await settle_expired(db, {d["user_id"] for ds in powers.values() for d in ds}, now):
+                break
         freezes = await active_freezes(db, {d["user_id"] for ds in powers.values() for d in ds}, now)
         for doc in affected:
             cid = doc["_id"]

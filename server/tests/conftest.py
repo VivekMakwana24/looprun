@@ -76,7 +76,7 @@ def make_app(clock):
     def _make(google_verifier=None, **overrides):
         base = dict(
             dev_auth=True,
-            jwt_secret="test-secret",
+            jwt_secret="test-secret-test-secret-test-secret-32b",
             publish_delay_seconds=0,
             celery_task_always_eager=True,
             run_rate_limit=1000,
@@ -132,7 +132,13 @@ def square_fixes(lat=50.0, lng=8.7, side_m=400.0, speed=3.0, t0=T0, step_s=5, mo
             pts.append((a + (c - a) * i / n, b + (d - b) * i / n))
     pts.append(corners[-1])
     return [
-        {"lat": p[0], "lng": p[1], "t": t0 + i * step_s * 1000, "acc": 5.0, "mock": bool(mock_every and i % mock_every == 0)}
+        {
+            "lat": p[0],
+            "lng": p[1],
+            "t": t0 + i * step_s * 1000,
+            "acc": 5.0,
+            "mock": bool(mock_every and i % mock_every == 0),
+        }
         for i, p in enumerate(pts)
     ]
 
@@ -177,7 +183,10 @@ def with_flag(code: str, severity: str, when):
             if not when(fixes):
                 return r
             return types.SimpleNamespace(
-                distance_m=r.distance_m, moving_seconds=r.moving_seconds, loops=r.loops, cells=r.cells,
+                distance_m=r.distance_m,
+                moving_seconds=r.moving_seconds,
+                loops=r.loops,
+                cells=r.cells,
                 flags=[*r.flags, inner.Flag(code=code, severity=severity, detail="test")],
             )
 

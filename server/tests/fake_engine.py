@@ -126,7 +126,11 @@ def apply_claim(cell, powers, current_owner, user_id, credit, now, cfg: Config =
     new[user_id] = CellPower(user_id, base + credit, now)
     best_u, best_p = current_owner, -1.0
     if current_owner is not None and current_owner in new:
-        best_p = faded_power(new[current_owner], now, cfg, freezes.get(current_owner)) if current_owner != user_id else new[user_id].power
+        best_p = (
+            faded_power(new[current_owner], now, cfg, freezes.get(current_owner))
+            if current_owner != user_id
+            else new[user_id].power
+        )
     for u, cp in new.items():
         p = cp.power if u == user_id else faded_power(cp, now, cfg, freezes.get(u))
         if p > best_p:

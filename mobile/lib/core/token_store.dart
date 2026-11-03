@@ -58,8 +58,12 @@ class InMemoryTokenStore implements TokenStore {
   Future<StoredSession?> read() async => _session;
 
   @override
-  Future<void> write(StoredSession session) async => _session = session;
+  Future<void> write(StoredSession session) async {
+    _session = session;
+  }
 
   @override
-  Future<void> clear() async => _session = null;
+  Future<void> clear() async {
+    _session = null;
+  }
 }

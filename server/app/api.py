@@ -14,6 +14,7 @@ from pymongo.errors import DuplicateKeyError
 from . import auth
 from .cellview import build_views
 from .events import iso_week, leaderboard_key, publish_changes
+from .freeze import settle_freeze
 from .models import (
     CellsResponse,
     FreezeRequest,
@@ -45,7 +46,7 @@ def parse_bbox(raw: str, max_deg: float) -> tuple[float, float, float, float]:
     min_lng, min_lat, max_lng, max_lat = (float(p) for p in parts)
     if not (-180 <= min_lng <= max_lng <= 180 and -90 <= min_lat <= max_lat <= 90):
         raise ValueError("bbox out of range or inverted")
-    if (max_lng - min_lng) > max_deg or (max_lat - min_lat) > max_deg:
+    if (max_lng - min_lng) > max_deg + 1e-9 or (max_lat - min_lat) > max_deg + 1e-9:
         raise ValueError(f"bbox larger than {max_deg} degrees on a side")
     return min_lng, min_lat, max_lng, max_lat
 
@@ -203,8 +204,13 @@ async def put_home_zones(
 async def freeze(
     body: FreezeRequest, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
 ) -> FreezeResponse:
-    until = res.clock() + body.days * DAY_MS if body.days > 0 else None
-    await res.db.users.update_one({"_id": user["_id"]}, {"$set": {"freeze_until": until}})
+    now = res.clock()
+    fresh = await res.db.users.find_one({"_id": user["_id"]})
+    if fresh and fresh.get("freeze_until"):
+        await settle_freeze(res.db, fresh, min(now, fresh["freeze_until"]))  # end the old freeze, forgive paused time
+    until = now + body.days * DAY_MS if body.days > 0 else None
+    if until:
+        await res.db.users.update_one({"_id": user["_id"]}, {"$set": {"freeze_until": until, "freeze_started_at": now}})
     return FreezeResponse(freeze_until=until)
 
 
