@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "looprun-engine"
+version = "0.1.0"
+description = "Pure-Python loop detection, H3 cell capture and ownership rules for Looprun"
+requires-python = ">=3.11"
+dependencies = ["h3>=4", "shapely>=2"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+include = ["looprun_engine*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# Config is a frozen dataclass, so `cfg: Config = Config()` (required by the spec) is safe.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/test_ownership.py" = ["E501"]  # wide case tables

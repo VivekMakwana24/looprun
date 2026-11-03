@@ -1,0 +1,37 @@
+name: looprun
+description: Looprun - a loop-closing running game on a shared H3 cell map.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  dio: ^5.4.3
+  drift: ^2.18.0
+  sqlite3_flutter_libs: ^0.5.24
+  path_provider: ^2.1.3
+  path: ^1.9.0
+  geolocator: ^13.0.1
+  flutter_foreground_task: ^8.10.0
+  google_sign_in: ^6.2.1
+  maplibre_gl: ^0.20.0
+  permission_handler: ^11.3.1
+  uuid: ^4.4.0
+  shared_preferences: ^2.2.3
+  flutter_secure_storage: ^9.2.2
+  h3_flutter: ^0.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  drift_dev: ^2.18.0
+  build_runner: ^2.4.9
+
+flutter:
+  uses-material-design: true

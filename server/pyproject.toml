@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "looprun-server"
+version = "1.0.0"
+description = "Looprun API (FastAPI), worker (Celery) and live updates"
+requires-python = ">=3.11"
+# looprun-engine is installed separately (pip install ./engine) - see server/Dockerfile.
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+  "celery[redis]>=5.3",
+  "redis>=5.0",
+  "pymongo>=4.6",
+  "motor>=3.4",
+  "pyjwt>=2.8",
+  "google-auth>=2.29",
+  "requests>=2.31",
+  "h3>=4.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0",
+  "httpx>=0.27",
+  "fakeredis>=2.23",
+  "mongomock-motor>=0.0.30",
+  "ruff>=0.4",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008"]  # FastAPI Depends() in defaults

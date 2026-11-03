@@ -1,0 +1,65 @@
+name: Release Android (signed AAB)
+
+# Builds a signed app bundle and uploads it as a workflow artifact. It does NOT publish to Google Play:
+# download the AAB and upload it in the Play Console yourself.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-aab:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Check signing secrets
+        run: |
+          for v in ANDROID_KEYSTORE_B64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD ANDROID_KEY_ALIAS; do
+            if [ -z "${!v}" ]; then echo "::error::Secret $v is not set"; exit 1; fi
+          done
+      - name: Generate Android scaffold
+        working-directory: mobile
+        run: bash tool/bootstrap.sh
+      - name: Install keystore and key.properties
+        run: |
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > mobile/android/app/upload-keystore.jks
+          {
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyPassword=$ANDROID_KEY_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "storeFile=upload-keystore.jks"
+          } > mobile/android/key.properties
+      - name: Install google-services.json (optional, needed for Crashlytics)
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_B64" ]; then
+            echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > mobile/android/app/google-services.json
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON_B64 not set; building without google-services.json"
+          fi
+      - name: Pub get
+        working-directory: mobile
+        run: flutter pub get
+      - name: Build release AAB
+        working-directory: mobile
+        run: flutter build appbundle --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: looprun-release-aab
+          path: mobile/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30

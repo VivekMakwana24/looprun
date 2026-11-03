@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python (ruff + pytest)
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 20s
+    env:
+      LOOPRUN_MONGO_URL: mongodb://localhost:27017/looprun_test
+      LOOPRUN_REDIS_URL: redis://localhost:6379/0
+      LOOPRUN_DEV_AUTH: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            engine/pyproject.toml
+            server/pyproject.toml
+      - name: Install packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff ./engine "./server[test]"
+      - name: Ruff
+        run: ruff check engine server
+      - name: Engine tests
+        run: python -m pytest engine
+      - name: Server tests
+        run: python -m pytest server
+
+  flutter:
+    name: Flutter (analyze, test, debug APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android scaffold
+        working-directory: mobile
+        run: bash tool/bootstrap.sh
+      - name: Pub get
+        working-directory: mobile
+        run: flutter pub get
+      - name: Analyze
+        working-directory: mobile
+        run: flutter analyze
+      - name: Test
+        working-directory: mobile
+        run: flutter test
+      - name: Build debug APK
+        working-directory: mobile
+        run: flutter build apk --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: looprun-debug-apk
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  docker:
+    name: Docker build (server image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (not pushed)
+        run: docker build -f server/Dockerfile -t looprun-server:ci .

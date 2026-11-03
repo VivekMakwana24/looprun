@@ -1,0 +1,17 @@
+# Caddy obtains and renews the HTTPS certificate automatically (Let's Encrypt).
+# Requirements: DNS A record for $LOOPRUN_DOMAIN points at the instance's static IP,
+# and ports 80 and 443 are open in the Lightsail firewall.
+{$LOOPRUN_DOMAIN} {
+	encode zstd gzip
+	# WebSocket upgrades (/v1/live) pass through reverse_proxy automatically.
+	reverse_proxy api:8000
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+	log {
+		output stdout
+		format console
+	}
+}

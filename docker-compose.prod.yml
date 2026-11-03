@@ -1,0 +1,85 @@
+# Production stack for a single Lightsail host. Run from /opt/looprun:
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Settings come from /opt/looprun/.env (created by deploy/setup-lightsail.sh; never committed).
+# Compose reads that same file for ${...} substitution because it sits in the project directory.
+# There is NO dev auth here: LOOPRUN_DEV_AUTH is deliberately not set.
+name: looprun
+
+x-server: &server
+  build:
+    context: .
+    dockerfile: server/Dockerfile
+  env_file: /opt/looprun/.env
+  environment: &server-env
+    LOOPRUN_MONGO_URL: mongodb://looprun:${MONGO_PASSWORD:?set MONGO_PASSWORD in /opt/looprun/.env}@mongo:27017/looprun?authSource=admin
+    LOOPRUN_REDIS_URL: redis://redis:6379/0
+  restart: unless-stopped
+  depends_on:
+    redis: {condition: service_healthy}
+    mongo: {condition: service_healthy}
+  networks: [internal]
+
+services:
+  api:
+    <<: *server
+    # no published ports: only Caddy reaches it
+
+  worker:
+    <<: *server
+    command: ["celery", "-A", "app.worker:celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    healthcheck:
+      disable: true
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [internal]
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: looprun
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?set MONGO_PASSWORD in /opt/looprun/.env}
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      LOOPRUN_DOMAIN: ${LOOPRUN_DOMAIN:?set LOOPRUN_DOMAIN in /opt/looprun/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+    networks: [internal]
+
+networks:
+  internal:
+
+volumes:
+  mongo-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
