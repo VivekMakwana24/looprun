@@ -56,8 +56,7 @@ void main() {
     expect(gateway.requests, 0);
 
     await tester.tap(find.byKey(const Key('disclosure_agree_button')));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(gateway.requests, 1);
     final container = ProviderScope.containerOf(tester.element(find.byType(DisclosureScreen)));
