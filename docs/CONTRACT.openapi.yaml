@@ -167,7 +167,7 @@ paths:
       summary: WebSocket (upgrade) that pushes cell ownership changes in a bbox
       description: >
         Connect to /v1/live?bbox=minLng,minLat,maxLng,maxLat&token=<access_token>.
-        Server sends JSON text frames {"type":"cell_changed","cell":"<h3>","owner":UserRef|null,"mine":bool}.
+        Server sends JSON text frames {"type":"cell_changed","cell":"<h3>","lat":number,"lng":number,"owner":UserRef|null,"mine":bool}.
         Hidden cells are never sent with an owner.
       responses:
         "101": {description: Switching protocols}
@@ -235,6 +235,8 @@ components:
       type: object
       properties:
         id: {type: string, description: H3 index at resolution 10}
+        lat: {type: number, description: "Cell centre latitude (server computes it with the engine so the app needs no H3 library)"}
+        lng: {type: number, description: "Cell centre longitude"}
         owner: {allOf: [{$ref: "#/components/schemas/UserRef"}], nullable: true}
         mine: {type: boolean}
         hidden: {type: boolean, description: "true when privacy rules hide the owner's name; owner is then null"}
