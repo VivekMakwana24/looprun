@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,7 +10,11 @@ import '../services/api_service.dart';
 import '../services/location_service.dart';
 import '../services/permission_service.dart';
 
-const String homeZonesPrefKey = 'home_zones_v1';
+/// Home zones are kept per account: the key is this prefix plus the user id.
+const String homeZonesPrefKeyPrefix = 'home_zones_v2_';
+
+/// The old key shared by all accounts. It is deleted the first time zones are read.
+const String legacyHomeZonesPrefKey = 'home_zones_v1';
 const String disclosurePrefKey = 'location_disclosure_accepted_v1';
 const int maxHomeZones = 5;
 
@@ -22,12 +27,15 @@ class ProfileRepository {
     required RunStore runs,
     required LocationService location,
     required PermissionService permissions,
-  })  : _api = api,
+    String? Function()? currentUserId,
+  })  : _currentUserId = currentUserId ?? (() => null),
+        _api = api,
         _prefs = prefs,
         _runs = runs,
         _location = location,
         _permissions = permissions;
 
+  final String? Function() _currentUserId;
   final ApiService _api;
   final SharedPreferences _prefs;
   final RunStore _runs;
@@ -46,7 +54,9 @@ class ProfileRepository {
 
   /// Zones are also kept on this phone because the API only offers "replace the whole list".
   List<HomeZone> homeZones() {
-    final raw = _prefs.getString(homeZonesPrefKey);
+    final key = _zonesKey();
+    if (key == null) return const [];
+    final raw = _prefs.getString(key);
     if (raw == null) return const [];
     try {
       return (jsonDecode(raw) as List)
@@ -57,14 +67,28 @@ class ProfileRepository {
     }
   }
 
+  /// Preference key of the signed-in account's zones, or null when nobody is signed in.
+  /// Also drops the old shared key, whose zones may belong to a different account.
+  String? _zonesKey() {
+    if (_prefs.containsKey(legacyHomeZonesPrefKey)) {
+      unawaited(_prefs.remove(legacyHomeZonesPrefKey));
+    }
+    final uid = _currentUserId();
+    if (uid == null || uid.isEmpty) return null;
+    return '$homeZonesPrefKeyPrefix$uid';
+  }
+
   Future<void> _saveZones(List<HomeZone> zones) async {
-    await _prefs.setString(homeZonesPrefKey, jsonEncode(zones.map((z) => z.toJson()).toList()));
+    final key = _zonesKey();
+    if (key == null) throw const AppException('Sign in to change your home zones.');
+    await _prefs.setString(key, jsonEncode(zones.map((z) => z.toJson()).toList()));
   }
 
   /// Adds a zone centred on the current position and uploads the full list.
   /// Throws [AppException] for user-fixable problems and ApiException on server errors;
   /// the local list changes only after the server accepted it.
   Future<List<HomeZone>> addZoneHere(double radiusM) async {
+    if (_zonesKey() == null) throw const AppException('Sign in to change your home zones.');
     final current = homeZones();
     if (current.length >= maxHomeZones) {
       throw const AppException('You can have at most $maxHomeZones home zones.');
@@ -80,6 +104,7 @@ class ProfileRepository {
   }
 
   Future<List<HomeZone>> clearZones() async {
+    if (_zonesKey() == null) throw const AppException('Sign in to change your home zones.');
     await _api.putHomeZones(const []);
     await _saveZones(const []);
     return const [];
@@ -94,7 +119,8 @@ class ProfileRepository {
   /// The caller signs out afterwards.
   Future<void> deleteAccount() async {
     await _api.deleteAccount();
+    final key = _zonesKey(); // read before the wipe: it needs the signed-in account
     await _runs.wipe();
-    await _saveZones(const []);
+    if (key != null) await _prefs.remove(key);
   }
 }

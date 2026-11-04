@@ -21,7 +21,7 @@ void main() {
     api = FakeApiService();
     store = MemoryStore();
     permissions = FakePermissionService();
-    tokens = InMemoryTokenStore(const StoredSession(token: 't', userId: 'u', userName: 'Ann'));
+    tokens = InMemoryTokenStore(const StoredSession(token: 't', userId: 'u1', userName: 'Ann'));
     container = ProviderContainer(overrides: [
       preferencesProvider.overrideWithValue(prefs),
       apiServiceProvider.overrideWithValue(api),
@@ -31,6 +31,7 @@ void main() {
       tokenStoreProvider.overrideWithValue(tokens),
       googleAuthServiceProvider.overrideWithValue(FakeGoogleAuthService()),
     ]);
+    await container.read(authRepositoryProvider).restore(); // signed in as u1, like MemoryStore
   });
 
   tearDown(() => container.dispose());

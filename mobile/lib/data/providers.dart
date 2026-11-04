@@ -59,11 +59,16 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
   return db;
 });
 
-final runStoreProvider =
-    Provider<RunStore>((ref) => DriftRunStore(ref.watch(appDatabaseProvider)));
+/// The signed-in account at the moment of the call. Local data is scoped by it, so it is read lazily.
+String? _currentUserId(Ref ref) => ref.read(authRepositoryProvider).current?.user.id;
 
-final uploadStoreProvider =
-    Provider<UploadStore>((ref) => DriftUploadStore(ref.watch(appDatabaseProvider)));
+final runStoreProvider = Provider<RunStore>(
+  (ref) => DriftRunStore(ref.watch(appDatabaseProvider), () => _currentUserId(ref)),
+);
+
+final uploadStoreProvider = Provider<UploadStore>(
+  (ref) => DriftUploadStore(ref.watch(appDatabaseProvider), () => _currentUserId(ref)),
+);
 
 final Provider<ApiService> apiServiceProvider = Provider<ApiService>((ref) {
   return DioApiService(
@@ -86,6 +91,7 @@ final uploadQueueProvider = Provider<UploadQueue>((ref) {
   final queue = UploadQueue(
     store: ref.watch(uploadStoreProvider),
     api: ref.watch(apiServiceProvider),
+    currentUserId: () => _currentUserId(ref),
   );
   // After a 401 the queue waits; a new sign-in releases it.
   final sub = ref.read(authRepositoryProvider).changes.listen((session) {
@@ -140,6 +146,7 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
     runs: ref.watch(runStoreProvider),
     location: ref.watch(locationServiceProvider),
     permissions: ref.watch(permissionServiceProvider),
+    currentUserId: () => _currentUserId(ref),
   );
 });
 

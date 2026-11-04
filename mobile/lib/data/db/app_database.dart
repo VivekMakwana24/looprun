@@ -8,6 +8,10 @@ part 'app_database.g.dart';
 @DataClassName('RunRow')
 class Runs extends Table {
   TextColumn get id => text()();
+
+  /// The account that recorded the run. Rows from before accounts were tracked have ''; they belong to
+  /// nobody and are never shown or uploaded.
+  TextColumn get userId => text().withDefault(const Constant(''))();
   IntColumn get startedAt => integer()();
   IntColumn get endedAt => integer().nullable()();
   TextColumn get state => text().withDefault(const Constant('recording'))();
@@ -26,6 +30,7 @@ class Runs extends Table {
 class Fixes extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get runId => text()();
+  TextColumn get userId => text().withDefault(const Constant(''))();
   RealColumn get lat => real()();
   RealColumn get lng => real()();
   IntColumn get t => integer()();
@@ -38,13 +43,26 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
-  Future<void> createRun(String id, int startedAt) {
-    return into(runs).insert(RunsCompanion.insert(id: id, startedAt: startedAt));
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            // Version 2 ties every run and fix to an account. Old rows get '' and stay unreachable.
+            await m.addColumn(runs, runs.userId);
+            await m.addColumn(fixes, fixes.userId);
+          }
+        },
+      );
+
+  Future<void> createRun(String userId, String id, int startedAt) {
+    return into(runs).insert(RunsCompanion.insert(id: id, startedAt: startedAt, userId: Value(userId)));
   }
 
   Future<void> addFix({
+    required String userId,
     required String runId,
     required double lat,
     required double lng,
@@ -54,6 +72,7 @@ class AppDatabase extends _$AppDatabase {
   }) {
     return into(fixes).insert(FixesCompanion.insert(
       runId: runId,
+      userId: Value(userId),
       lat: lat,
       lng: lng,
       t: t,
@@ -62,54 +81,57 @@ class AppDatabase extends _$AppDatabase {
     ));
   }
 
-  Future<List<FixRow>> fixesFor(String runId) {
+  Future<List<FixRow>> fixesFor(String userId, String runId) {
     return (select(fixes)
-          ..where((f) => f.runId.equals(runId))
+          ..where((f) => f.runId.equals(runId) & f.userId.equals(userId))
           ..orderBy([(f) => OrderingTerm.asc(f.t)]))
         .get();
   }
 
-  Future<RunRow?> runById(String id) {
-    return (select(runs)..where((r) => r.id.equals(id))).getSingleOrNull();
+  Future<RunRow?> runById(String userId, String id) {
+    return (select(runs)..where((r) => r.id.equals(id) & r.userId.equals(userId))).getSingleOrNull();
   }
 
-  Stream<RunRow?> watchRun(String id) {
-    return (select(runs)..where((r) => r.id.equals(id))).watchSingleOrNull();
+  Stream<RunRow?> watchRun(String userId, String id) {
+    return (select(runs)..where((r) => r.id.equals(id) & r.userId.equals(userId))).watchSingleOrNull();
   }
 
   /// Runs that were being recorded when the app died.
-  Future<RunRow?> unfinishedRun() {
+  Future<RunRow?> unfinishedRun(String userId) {
     return (select(runs)
-          ..where((r) => r.state.isIn(['recording', 'paused']))
+          ..where((r) => r.state.isIn(['recording', 'paused']) & r.userId.equals(userId))
           ..orderBy([(r) => OrderingTerm.desc(r.startedAt)])
           ..limit(1))
         .getSingleOrNull();
   }
 
-  Future<void> setRunState(String id, String state) {
-    return (update(runs)..where((r) => r.id.equals(id)))
+  Future<void> setRunState(String userId, String id, String state) {
+    return (update(runs)..where((r) => r.id.equals(id) & r.userId.equals(userId)))
         .write(RunsCompanion(state: Value(state)));
   }
 
   /// Marks the run complete locally and queues it for upload.
-  Future<void> markFinished(String id, int endedAt) {
-    return (update(runs)..where((r) => r.id.equals(id))).write(RunsCompanion(
+  Future<void> markFinished(String userId, String id, int endedAt) {
+    return (update(runs)..where((r) => r.id.equals(id) & r.userId.equals(userId))).write(RunsCompanion(
       state: const Value('finished'),
       upload: const Value('queued'),
       endedAt: Value(endedAt),
     ));
   }
 
-  Future<void> discardRun(String id) async {
-    await (delete(fixes)..where((f) => f.runId.equals(id))).go();
-    await (delete(runs)..where((r) => r.id.equals(id))).go();
+  Future<void> discardRun(String userId, String id) async {
+    await (delete(fixes)..where((f) => f.runId.equals(id) & f.userId.equals(userId))).go();
+    await (delete(runs)..where((r) => r.id.equals(id) & r.userId.equals(userId))).go();
   }
 
-  Future<List<RunRow>> activeUploads() {
-    return (select(runs)..where((r) => r.upload.isIn(['queued', 'processing']))).get();
+  Future<List<RunRow>> activeUploads(String userId) {
+    return (select(runs)
+          ..where((r) => r.upload.isIn(['queued', 'processing']) & r.userId.equals(userId)))
+        .get();
   }
 
   Future<void> writeUpload(
+    String userId,
     String id, {
     required String upload,
     required int attempts,
@@ -117,7 +139,7 @@ class AppDatabase extends _$AppDatabase {
     String? lastError,
     String? resultJson,
   }) {
-    return (update(runs)..where((r) => r.id.equals(id))).write(RunsCompanion(
+    return (update(runs)..where((r) => r.id.equals(id) & r.userId.equals(userId))).write(RunsCompanion(
       upload: Value(upload),
       attempts: Value(attempts),
       nextAttemptAt: Value(nextAttemptAt),
@@ -126,17 +148,17 @@ class AppDatabase extends _$AppDatabase {
     ));
   }
 
-  Stream<List<RunRow>> watchRecentRuns({int limit = 20}) {
+  Stream<List<RunRow>> watchRecentRuns(String userId, {int limit = 20}) {
     return (select(runs)
-          ..where((r) => r.state.equals('finished'))
+          ..where((r) => r.state.equals('finished') & r.userId.equals(userId))
           ..orderBy([(r) => OrderingTerm.desc(r.startedAt)])
           ..limit(limit))
         .watch();
   }
 
-  /// Used when the account is deleted.
-  Future<void> wipe() async {
-    await delete(fixes).go();
-    await delete(runs).go();
+  /// Used when the account is deleted: removes that account's data only.
+  Future<void> wipe(String userId) async {
+    await (delete(fixes)..where((f) => f.userId.equals(userId))).go();
+    await (delete(runs)..where((r) => r.userId.equals(userId))).go();
   }
 }

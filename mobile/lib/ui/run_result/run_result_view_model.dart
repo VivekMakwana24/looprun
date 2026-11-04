@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/api_exception.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../auth/auth_view_model.dart';
 
 /// The stored run (updates as the upload progresses).
-final runResultProvider = StreamProvider.autoDispose.family<RunSummary?, String>(
-  (ref, id) => ref.watch(runRepositoryProvider).watchRun(id),
-);
+final runResultProvider = StreamProvider.autoDispose.family<RunSummary?, String>((ref, id) {
+  ref.watch(authViewModelProvider.select((s) => s.user?.id));
+  return ref.watch(runRepositoryProvider).watchRun(id);
+});
 
 /// Commands of the result screen.
 class RunResultViewModel {

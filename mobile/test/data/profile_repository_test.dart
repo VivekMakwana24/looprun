@@ -28,6 +28,7 @@ void main() {
       runs: store,
       location: location,
       permissions: permissions,
+      currentUserId: () => store.userId,
     );
   });
 
@@ -85,6 +86,49 @@ void main() {
     expect(api.deleted, isTrue);
     expect(store.runIds, isEmpty);
     expect(repo.homeZones(), isEmpty);
+  });
+
+  test('home zones belong to the account: B does not see A\'s zones, A gets them back', () async {
+    await repo.addZoneHere(100);
+    expect(repo.homeZones().length, 1);
+
+    store.userId = 'u2'; // sign out A, sign in B
+    expect(repo.homeZones(), isEmpty);
+    await repo.addZoneHere(50);
+    expect(repo.homeZones().single.radiusM, 50);
+
+    store.userId = 'u1';
+    expect(repo.homeZones().single.radiusM, 100);
+  });
+
+  test('nobody signed in: no zones and none can be added', () async {
+    store.userId = null;
+    expect(repo.homeZones(), isEmpty);
+    await expectLater(repo.addZoneHere(100), throwsA(isA<AppException>()));
+  });
+
+  test('the old shared zones key is dropped, not handed to whoever signs in next', () async {
+    await prefs.setString(legacyHomeZonesPrefKey, '[{"lat":1,"lng":2,"radius_m":100}]');
+    expect(repo.homeZones(), isEmpty);
+    await Future<void>.delayed(Duration.zero);
+    expect(prefs.containsKey(legacyHomeZonesPrefKey), isFalse);
+  });
+
+  test('deleting account A leaves account B\'s runs and zones alone', () async {
+    await repo.addZoneHere(100);
+    await store.createRun('a-run', 1);
+    store.userId = 'u2';
+    await repo.addZoneHere(50);
+    await store.createRun('b-run', 1);
+
+    store.userId = 'u1';
+    await repo.deleteAccount();
+    expect(store.runIds, isEmpty);
+    expect(repo.homeZones(), isEmpty);
+
+    store.userId = 'u2';
+    expect(store.runIds, ['b-run']);
+    expect(repo.homeZones().single.radiusM, 50);
   });
 
   test('HomeZone equality is by value', () {

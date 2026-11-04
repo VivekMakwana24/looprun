@@ -67,13 +67,19 @@ class UploadQueue {
     this.policy = const BackoffPolicy(),
     this.pollInterval = const Duration(seconds: 3),
     int Function()? nowMs,
-  }) : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
+    String? Function()? currentUserId,
+  })  : _currentUserId = currentUserId,
+        _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
 
   final UploadStore store;
   final RunsApi api;
   final BackoffPolicy policy;
   final Duration pollInterval;
   final int Function() _nowMs;
+
+  /// The signed-in account, or null. When given, the queue sends nothing while signed out and stops
+  /// the moment the account changes, so one user's run is never sent with another user's token.
+  final String? Function()? _currentUserId;
   bool _busy = false;
   bool _authBlocked = false;
 
@@ -86,6 +92,9 @@ class UploadQueue {
   /// Processes every job that is due. Returns how many jobs were attempted.
   Future<int> tick() async {
     if (_busy || _authBlocked) return 0;
+    final getUser = _currentUserId;
+    final owner = getUser?.call();
+    if (getUser != null && (owner == null || owner.isEmpty)) return 0;
     _busy = true;
     var touched = 0;
     try {
@@ -93,9 +102,10 @@ class UploadQueue {
       final jobs = await store.activeJobs();
       for (final job in jobs) {
         if (_authBlocked) break;
+        if (getUser != null && getUser() != owner) break; // somebody else signed in meanwhile
         if (job.nextAttemptAt > now) continue;
         touched++;
-        await _process(job, now);
+        await _process(job, now, owner);
       }
     } finally {
       _busy = false;
@@ -110,11 +120,14 @@ class UploadQueue {
     await store.saveJob(UploadJob(runId: runId, stage: UploadStage.queued, result: job.result));
   }
 
-  Future<void> _process(UploadJob job, int now) async {
+  Future<void> _process(UploadJob job, int now, String? owner) async {
     try {
       final RunStatus status;
       if (job.stage == UploadStage.queued) {
         final payload = await store.buildPayload(job.runId);
+        final getUser = _currentUserId;
+        // No await between this check and the request: the token is read when the request starts.
+        if (getUser != null && getUser() != owner) return;
         status = await api.uploadRun(payload);
       } else {
         status = await api.getRun(job.runId);

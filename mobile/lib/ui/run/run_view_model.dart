@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/models.dart';
 import '../../data/models/recording_snapshot.dart';
 import '../../data/providers.dart';
+import '../auth/auth_view_model.dart';
 
 /// View model of the Run tab. The state is the repository's [RecordingSnapshot]; commands go back to it.
 class RunViewModel extends Notifier<RecordingSnapshot> {
@@ -27,6 +28,8 @@ class RunViewModel extends Notifier<RecordingSnapshot> {
 final runViewModelProvider = NotifierProvider<RunViewModel, RecordingSnapshot>(RunViewModel.new);
 
 /// The last finished runs on this phone, newest first.
-final recentRunsProvider = StreamProvider.autoDispose<List<RunSummary>>(
-  (ref) => ref.watch(runRepositoryProvider).watchRecentRuns(limit: 10),
-);
+final recentRunsProvider = StreamProvider.autoDispose<List<RunSummary>>((ref) {
+  // Start over when another account signs in: the list is per account.
+  ref.watch(authViewModelProvider.select((s) => s.user?.id));
+  return ref.watch(runRepositoryProvider).watchRecentRuns(limit: 10);
+});

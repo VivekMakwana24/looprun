@@ -6,8 +6,16 @@ import 'app_database.dart';
 import 'run_store.dart';
 
 class DriftRunStore implements RunStore {
-  DriftRunStore(this.db);
+  DriftRunStore(this.db, this._currentUserId);
   final AppDatabase db;
+  final String? Function() _currentUserId;
+
+  /// The signed-in account. Writes without one are refused; reads see nothing.
+  String get _uid {
+    final id = _currentUserId();
+    if (id == null || id.isEmpty) throw StateError('Not signed in');
+    return id;
+  }
 
   RunSummary _toSummary(RunRow r) {
     RunStatus? result;
@@ -32,11 +40,12 @@ class DriftRunStore implements RunStore {
   }
 
   @override
-  Future<void> createRun(String id, int startedAt) => db.createRun(id, startedAt);
+  Future<void> createRun(String id, int startedAt) => db.createRun(_uid, id, startedAt);
 
   @override
   Future<void> addFix(String runId, GeoFix fix) {
     return db.addFix(
+      userId: _uid,
       runId: runId,
       lat: fix.lat,
       lng: fix.lng,
@@ -48,7 +57,9 @@ class DriftRunStore implements RunStore {
 
   @override
   Future<List<Fix>> fixesFor(String runId) async {
-    final rows = await db.fixesFor(runId);
+    final uid = _currentUserId();
+    if (uid == null || uid.isEmpty) return const [];
+    final rows = await db.fixesFor(uid, runId);
     return rows
         .map((f) => Fix(lat: f.lat, lng: f.lng, t: f.t, acc: f.acc, mock: f.isMock))
         .toList();
@@ -56,35 +67,43 @@ class DriftRunStore implements RunStore {
 
   @override
   Future<RunSummary?> runById(String id) async {
-    final r = await db.runById(id);
+    final uid = _currentUserId();
+    if (uid == null || uid.isEmpty) return null;
+    final r = await db.runById(uid, id);
     return r == null ? null : _toSummary(r);
   }
 
   @override
   Future<RunSummary?> unfinishedRun() async {
-    final r = await db.unfinishedRun();
+    final uid = _currentUserId();
+    if (uid == null || uid.isEmpty) return null;
+    final r = await db.unfinishedRun(uid);
     return r == null ? null : _toSummary(r);
   }
 
   @override
-  Future<void> setRunState(String id, String state) => db.setRunState(id, state);
+  Future<void> setRunState(String id, String state) => db.setRunState(_uid, id, state);
 
   @override
-  Future<void> markFinished(String id, int endedAt) => db.markFinished(id, endedAt);
+  Future<void> markFinished(String id, int endedAt) => db.markFinished(_uid, id, endedAt);
 
   @override
-  Future<void> discardRun(String id) => db.discardRun(id);
+  Future<void> discardRun(String id) => db.discardRun(_uid, id);
 
   @override
   Stream<RunSummary?> watchRun(String id) {
-    return db.watchRun(id).map((r) => r == null ? null : _toSummary(r));
+    final uid = _currentUserId();
+    if (uid == null || uid.isEmpty) return Stream.value(null);
+    return db.watchRun(uid, id).map((r) => r == null ? null : _toSummary(r));
   }
 
   @override
   Stream<List<RunSummary>> watchRecentRuns({int limit = 10}) {
-    return db.watchRecentRuns(limit: limit).map((rows) => rows.map(_toSummary).toList());
+    final uid = _currentUserId();
+    if (uid == null || uid.isEmpty) return Stream.value(const <RunSummary>[]);
+    return db.watchRecentRuns(uid, limit: limit).map((rows) => rows.map(_toSummary).toList());
   }
 
   @override
-  Future<void> wipe() => db.wipe();
+  Future<void> wipe() => db.wipe(_uid);
 }

@@ -5,8 +5,14 @@ import '../db/app_database.dart';
 import 'upload_queue.dart';
 
 class DriftUploadStore implements UploadStore {
-  DriftUploadStore(this.db);
+  DriftUploadStore(this.db, this._currentUserId);
   final AppDatabase db;
+  final String? Function() _currentUserId;
+
+  String? get _uidOrNull {
+    final id = _currentUserId();
+    return (id == null || id.isEmpty) ? null : id;
+  }
 
   UploadJob _toJob(RunRow r) {
     RunStatus? result;
@@ -34,19 +40,26 @@ class DriftUploadStore implements UploadStore {
 
   @override
   Future<List<UploadJob>> activeJobs() async {
-    final rows = await db.activeUploads();
+    final uid = _uidOrNull;
+    if (uid == null) return const [];
+    final rows = await db.activeUploads(uid);
     return rows.map(_toJob).toList();
   }
 
   @override
   Future<UploadJob?> getJob(String runId) async {
-    final r = await db.runById(runId);
+    final uid = _uidOrNull;
+    if (uid == null) return null;
+    final r = await db.runById(uid, runId);
     return r == null ? null : _toJob(r);
   }
 
   @override
   Future<void> saveJob(UploadJob job) {
+    final uid = _uidOrNull;
+    if (uid == null) throw StateError('Not signed in');
     return db.writeUpload(
+      uid,
       job.runId,
       upload: job.stage.name,
       attempts: job.attempts,
@@ -58,11 +71,13 @@ class DriftUploadStore implements UploadStore {
 
   @override
   Future<RunUpload> buildPayload(String runId) async {
-    final run = await db.runById(runId);
+    final uid = _uidOrNull;
+    if (uid == null) throw StateError('Not signed in');
+    final run = await db.runById(uid, runId);
     if (run == null) {
       throw StateError('Run $runId not found');
     }
-    final rows = await db.fixesFor(runId);
+    final rows = await db.fixesFor(uid, runId);
     final fixes = rows
         .map((f) => Fix(lat: f.lat, lng: f.lng, t: f.t, acc: f.acc, mock: f.isMock))
         .toList();

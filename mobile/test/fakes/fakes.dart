@@ -187,6 +187,9 @@ class FakeLiveService implements LiveService {
 
 /// One in-memory store used as both the run store and the upload store, like the Drift database.
 class MemoryStore implements RunStore, UploadStore {
+  /// The signed-in account; every read and write is scoped to it, like the Drift stores.
+  String? userId = 'u1';
+
   final Map<String, _Run> _runs = {};
   final Map<String, UploadJob> jobs = {};
   bool failFixWrites = false;
@@ -194,7 +197,24 @@ class MemoryStore implements RunStore, UploadStore {
   /// While set, addFix waits for it before storing (a slow disk). Complete it to let the writes land.
   Completer<void>? holdFixWrites;
 
-  Iterable<String> get runIds => _runs.keys;
+  /// Number of fixes of a run regardless of the signed-in account (for assertions).
+  int storedFixCount(String runId) => _runs[runId]?.fixes.length ?? 0;
+
+  /// Ids of the signed-in account's runs.
+  Iterable<String> get runIds => _runs.values.where(_mine).map((r) => r.id);
+
+  bool _mine(_Run r) => userId != null && r.owner == userId;
+
+  _Run? _own(String id) {
+    final r = _runs[id];
+    return r != null && _mine(r) ? r : null;
+  }
+
+  String get _uid {
+    final u = userId;
+    if (u == null) throw StateError('Not signed in');
+    return u;
+  }
 
   RunSummary _summary(_Run r) => RunSummary(
         id: r.id,
@@ -210,7 +230,7 @@ class MemoryStore implements RunStore, UploadStore {
   // RunStore
   @override
   Future<void> createRun(String id, int startedAt) async {
-    _runs[id] = _Run(id, startedAt);
+    _runs[id] = _Run(id, startedAt, _uid);
   }
 
   @override
@@ -218,21 +238,23 @@ class MemoryStore implements RunStore, UploadStore {
     if (failFixWrites) throw StateError('disk full');
     final hold = holdFixWrites;
     if (hold != null) await hold.future;
-    _runs[runId]!.fixes.add(Fix(lat: fix.lat, lng: fix.lng, t: fix.t, acc: fix.acc, mock: fix.isMock));
+    final r = _own(runId);
+    if (r == null) throw StateError('Run $runId not found');
+    r.fixes.add(Fix(lat: fix.lat, lng: fix.lng, t: fix.t, acc: fix.acc, mock: fix.isMock));
   }
 
   @override
-  Future<List<Fix>> fixesFor(String runId) async => List<Fix>.of(_runs[runId]?.fixes ?? const []);
+  Future<List<Fix>> fixesFor(String runId) async => List<Fix>.of(_own(runId)?.fixes ?? const []);
 
   @override
   Future<RunSummary?> runById(String id) async {
-    final r = _runs[id];
+    final r = _own(id);
     return r == null ? null : _summary(r);
   }
 
   @override
   Future<RunSummary?> unfinishedRun() async {
-    for (final r in _runs.values) {
+    for (final r in _runs.values.where(_mine)) {
       if (r.state == 'recording' || r.state == 'paused') return _summary(r);
     }
     return null;
@@ -240,12 +262,12 @@ class MemoryStore implements RunStore, UploadStore {
 
   @override
   Future<void> setRunState(String id, String state) async {
-    _runs[id]?.state = state;
+    _own(id)?.state = state;
   }
 
   @override
   Future<void> markFinished(String id, int endedAt) async {
-    final r = _runs[id]!;
+    final r = _own(id)!;
     r.state = 'finished';
     r.endedAt = endedAt;
     jobs[id] = UploadJob(runId: id, stage: UploadStage.queued);
@@ -253,40 +275,51 @@ class MemoryStore implements RunStore, UploadStore {
 
   @override
   Future<void> discardRun(String id) async {
+    if (_own(id) == null) return;
     _runs.remove(id);
     jobs.remove(id);
   }
 
   @override
-  Stream<RunSummary?> watchRun(String id) => Stream.value(_runs[id] == null ? null : _summary(_runs[id]!));
+  Stream<RunSummary?> watchRun(String id) =>
+      Stream.value(_own(id) == null ? null : _summary(_own(id)!));
 
   @override
-  Stream<List<RunSummary>> watchRecentRuns({int limit = 10}) =>
-      Stream.value(_runs.values.where((r) => r.state == 'finished').map(_summary).toList());
+  Stream<List<RunSummary>> watchRecentRuns({int limit = 10}) => Stream.value(
+      _runs.values.where((r) => _mine(r) && r.state == 'finished').map(_summary).toList());
 
   @override
   Future<void> wipe() async {
-    _runs.clear();
-    jobs.clear();
+    final uid = _uid;
+    final gone = _runs.values.where((r) => r.owner == uid).map((r) => r.id).toList();
+    for (final id in gone) {
+      _runs.remove(id);
+      jobs.remove(id);
+    }
   }
 
   // UploadStore
   @override
   Future<List<UploadJob>> activeJobs() async => jobs.values
+      .where((j) => _own(j.runId) != null)
       .where((j) => j.stage == UploadStage.queued || j.stage == UploadStage.processing)
       .toList();
 
   @override
-  Future<UploadJob?> getJob(String runId) async => jobs[runId];
+  Future<UploadJob?> getJob(String runId) async => _own(runId) == null ? null : jobs[runId];
 
   @override
   Future<void> saveJob(UploadJob job) async {
+    if (_own(job.runId) == null && _runs.containsKey(job.runId)) {
+      throw StateError('Run ${job.runId} belongs to another account');
+    }
     jobs[job.runId] = job;
   }
 
   @override
   Future<RunUpload> buildPayload(String runId) async {
-    final r = _runs[runId]!;
+    final r = _own(runId);
+    if (r == null) throw StateError('Run $runId not found');
     return RunUpload(
       id: runId,
       startedAt: r.startedAt,
@@ -297,8 +330,9 @@ class MemoryStore implements RunStore, UploadStore {
 }
 
 class _Run {
-  _Run(this.id, this.startedAt);
+  _Run(this.id, this.startedAt, this.owner);
   final String id;
+  final String owner;
   final int startedAt;
   int? endedAt;
   String state = 'recording';

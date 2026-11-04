@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:looprun/data/providers.dart';
+import 'package:looprun/data/services/token_store.dart';
 import 'package:looprun/domain/recorder/run_recorder.dart';
 import 'package:looprun/ui/run/run_view_model.dart';
 
@@ -23,12 +24,17 @@ void main() {
       permissionServiceProvider.overrideWithValue(FakePermissionService()),
       foregroundServiceProvider.overrideWithValue(FakeForegroundService()),
       apiServiceProvider.overrideWithValue(api),
+      tokenStoreProvider.overrideWithValue(
+        InMemoryTokenStore(const StoredSession(token: 't', userId: 'u1', userName: 'Ann')),
+      ),
+      googleAuthServiceProvider.overrideWithValue(FakeGoogleAuthService()),
     ]);
   });
 
   tearDown(() => container.dispose());
 
   test('the view model follows the repository: start, record, stop, acknowledge', () async {
+    await container.read(authRepositoryProvider).restore(); // signed in as u1, the store's account
     final sub = container.listen(runViewModelProvider, (previous, next) {});
     final vm = container.read(runViewModelProvider.notifier);
     expect(sub.read().status, RecorderStatus.idle);
