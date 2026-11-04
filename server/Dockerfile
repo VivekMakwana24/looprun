@@ -24,10 +24,10 @@ WORKDIR /app
 USER 10001:10001
 EXPOSE 8000
 
-# Used by the API container. The worker has no HTTP port; docker-compose disables this check for it.
+# Used by the API container. The worker has no HTTP port; docker-compose replaces this check for it with `celery inspect ping`.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).status == 200 else 1)"]
 
 # Default command = API. The worker overrides it (see docker-compose files):
-#   celery -A app.worker:celery_app worker --loglevel=info
+#   celery -A app.worker:celery_app worker -B -s /tmp/celerybeat-schedule --loglevel=info
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

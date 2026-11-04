@@ -61,6 +61,8 @@ docker compose -f docker-compose.prod.yml restart api worker
 docker compose -f docker-compose.prod.yml down                       # stop all (volumes are kept)
 ```
 
+The `worker` container also runs the Celery beat scheduler (`-B`), which triggers the stuck-run sweeper every 60 s; look for `beat: Starting...` in its log after a deploy. Never scale `worker` above one container (duplicate beats). `docker compose ps` shows the worker as `healthy` once `celery inspect ping` answers; `unhealthy` means the sweeper is not running either.
+
 Containers use `restart: unless-stopped`, so they come back after a reboot as long as the Docker service is enabled (the setup script does that).
 
 ## 4a. Data retention and account deletion (operational facts)

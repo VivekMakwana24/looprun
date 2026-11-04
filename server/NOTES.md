@@ -6,7 +6,7 @@ Env (all `LOOPRUN_` prefixed; old unprefixed names accepted as fallbacks for a f
 `LOOPRUN_JWT_SECRET` (required unless dev auth; at least 32 characters, otherwise the app refuses to start),
 `LOOPRUN_DEV_AUTH`, `LOOPRUN_PUBLISH_DELAY_SECONDS` (1800), `LOOPRUN_PRIVACY_K` (3), `LOOPRUN_RUN_RATE_LIMIT` (30/h),
 `LOOPRUN_MAX_FIXES`, ... see app/config.py. Nonsense values (halflife <= 0, lock TTL < 2 s, ...) fail at startup.
-Worker + sweeper: `celery -A app.worker:celery_app worker -B` (or a separate `celery -A app.worker:celery_app beat`).
+Worker + sweeper: `celery -A app.worker:celery_app worker -B -s /tmp/celerybeat-schedule` (or a separate `celery -A app.worker:celery_app beat -s /tmp/celerybeat-schedule`). Use `-s` under `/tmp`: the image's `/app` is root-owned and the process runs as uid 10001. Run beat in exactly one container. Both compose files already do this and add a `celery inspect ping` healthcheck.
 Tests: `LOOPRUN_TEST_ENGINE=fake|real` (default: real if installed, else tests/fake_engine.py).
 `pytest server -q -o addopts="" -p no:warnings`; verifier findings are pinned in `tests/test_hardening.py` (docs/verification/S-fixes.md) and
 `tests/test_hardening2.py` (second pass, docs/verification/S-fixes2.md).

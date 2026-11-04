@@ -24,10 +24,16 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
-    command: ["celery", "-A", "app.worker:celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    command: ["celery", "-A", "app.worker:celery_app", "worker", "-B", "-s", "/tmp/celerybeat-schedule", "--loglevel=info", "--concurrency=2"]
     environment: *server-env
+    # Exactly one worker container runs the embedded beat (-B); /tmp is writable for uid 10001
+    # (the working directory /app is root-owned). Do not scale this service above 1.
     healthcheck:
-      disable: true
+      test: ["CMD-SHELL", "celery -A app.worker:celery_app inspect ping -d celery@$$HOSTNAME -t 5 >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       redis: {condition: service_healthy}
       mongo: {condition: service_healthy}
