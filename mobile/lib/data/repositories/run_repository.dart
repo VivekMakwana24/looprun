@@ -74,6 +74,11 @@ class RunRepository {
   bool get isRecording =>
       _starting || _recorder.isActive || _recorder.status == RecorderStatus.stopping;
 
+  int? _lastStoppedAtMs;
+
+  /// When the last run stopped (epoch ms), or null. Used to hold back a sign-out right after a run.
+  int? get lastStoppedAtMs => _lastStoppedAtMs;
+
   void _emit(RecordingSnapshot s) {
     _snap = s;
     if (!_snapshots.isClosed) _snapshots.add(s);
@@ -198,6 +203,7 @@ class RunRepository {
   Future<void> stop() async {
     if (!_recorder.isActive) return;
     final runId = _recorder.runId!;
+    _lastStoppedAtMs = _nowMs();
     _recorder.stop(); // stopping: no new fixes are accepted
     _emit(_snap.copyWith(status: RecorderStatus.stopping, elapsedMs: _recorder.elapsedMs));
     await _teardown();

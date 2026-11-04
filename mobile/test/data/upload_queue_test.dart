@@ -168,6 +168,45 @@ void main() {
     expect(await queue.tick(), 0);
   });
 
+  test('a 401 keeps the job queued, counts no attempt and stops the tick', () async {
+    store.jobs['r2'] = const UploadJob(runId: 'r2', stage: UploadStage.queued);
+    api.uploadResults.add(const ApiException(401, 'expired'));
+    await queue.tick();
+
+    expect(store.jobs['r1']!.stage, UploadStage.queued);
+    expect(store.jobs['r1']!.attempts, 0);
+    expect(store.jobs['r1']!.lastError, isNull);
+    expect(store.jobs['r2']!.stage, UploadStage.queued);
+    expect(api.uploadedIds, ['r1'], reason: 'the second job must not be sent with a dead token');
+    expect(queue.isBlockedByAuth, isTrue);
+
+    // Time passing does not help: nothing is sent until somebody signs in.
+    now += 10 * 60 * 1000;
+    expect(await queue.tick(), 0);
+    expect(api.uploadedIds, ['r1']);
+  });
+
+  test('after re-auth the same run uploads and is accepted', () async {
+    api.uploadResults
+      ..add(const ApiException(401, 'expired'))
+      ..add(st('accepted'));
+    await queue.tick();
+    expect(store.jobs['r1']!.stage, UploadStage.queued);
+
+    queue.resumeAfterAuth();
+    await queue.tick();
+    expect(store.jobs['r1']!.stage, UploadStage.done);
+    expect(api.uploadedIds, ['r1', 'r1']);
+  });
+
+  test('a 401 while polling keeps the processing job', () async {
+    store.jobs['r1'] = const UploadJob(runId: 'r1', stage: UploadStage.processing);
+    api.getResults.add(const ApiException(401, 'expired'));
+    await queue.tick();
+    expect(store.jobs['r1']!.stage, UploadStage.processing);
+    expect(queue.isBlockedByAuth, isTrue);
+  });
+
   test('an unexpected error fails that job only and does not escape tick', () async {
     store.jobs['r2'] = const UploadJob(runId: 'r2', stage: UploadStage.queued);
     api.uploadResults.add(st('accepted'));

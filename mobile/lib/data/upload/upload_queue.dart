@@ -75,16 +75,24 @@ class UploadQueue {
   final Duration pollInterval;
   final int Function() _nowMs;
   bool _busy = false;
+  bool _authBlocked = false;
+
+  /// True after a 401: nothing is sent until [resumeAfterAuth]. Jobs stay queued, untouched.
+  bool get isBlockedByAuth => _authBlocked;
+
+  /// Call when a user signed in. Clears the block that a 401 set.
+  void resumeAfterAuth() => _authBlocked = false;
 
   /// Processes every job that is due. Returns how many jobs were attempted.
   Future<int> tick() async {
-    if (_busy) return 0;
+    if (_busy || _authBlocked) return 0;
     _busy = true;
     var touched = 0;
     try {
       final now = _nowMs();
       final jobs = await store.activeJobs();
       for (final job in jobs) {
+        if (_authBlocked) break;
         if (job.nextAttemptAt > now) continue;
         touched++;
         await _process(job, now);
@@ -141,6 +149,12 @@ class UploadQueue {
   }
 
   Future<void> _onError(UploadJob job, ApiException e, int now) async {
+    if (e.statusCode == 401) {
+      // The token is no good, not the run. Keep the job exactly as it is (no attempt counted, no
+      // failure shown) and stop sending until somebody signs in again.
+      _authBlocked = true;
+      return;
+    }
     final failures = job.attempts + 1;
     if (policy.shouldRetry(e.statusCode, failures)) {
       await store.saveJob(job.copyWith(

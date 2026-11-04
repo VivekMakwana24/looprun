@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/config.dart';
+import 'auth/session_expiry_policy.dart';
 import 'db/app_database.dart';
 import 'db/connection.dart';
 import 'db/drift_run_store.dart';
@@ -68,19 +69,33 @@ final Provider<ApiService> apiServiceProvider = Provider<ApiService>((ref) {
   return DioApiService(
     baseUrl: AppConfig.apiBaseUrl,
     tokenProvider: () => ref.read(authRepositoryProvider).token,
-    onUnauthorized: () {
-      // Do not sign the user out in the middle of a run; the next request after the run will retry.
-      if (ref.read(runRepositoryProvider).isRecording) return;
-      unawaited(ref.read(authRepositoryProvider).expireSession());
-    },
+    onUnauthorized: () => ref.read(sessionExpiryPolicyProvider).onUnauthorized(),
+  );
+});
+
+/// The rule for when a 401 signs the user out lives in [SessionExpiryPolicy] (unit tested).
+final Provider<SessionExpiryPolicy> sessionExpiryPolicyProvider = Provider<SessionExpiryPolicy>((ref) {
+  return SessionExpiryPolicy(
+    isRecording: () => ref.read(runRepositoryProvider).isRecording,
+    lastStoppedAtMs: () => ref.read(runRepositoryProvider).lastStoppedAtMs,
+    expire: () => unawaited(ref.read(authRepositoryProvider).expireSession()),
   );
 });
 
 final uploadQueueProvider = Provider<UploadQueue>((ref) {
-  return UploadQueue(
+  final queue = UploadQueue(
     store: ref.watch(uploadStoreProvider),
     api: ref.watch(apiServiceProvider),
   );
+  // After a 401 the queue waits; a new sign-in releases it.
+  final sub = ref.read(authRepositoryProvider).changes.listen((session) {
+    if (session == null) return;
+    ref.read(sessionExpiryPolicyProvider).clear();
+    queue.resumeAfterAuth();
+    unawaited(ref.read(runRepositoryProvider).tickUploads());
+  });
+  ref.onDispose(sub.cancel);
+  return queue;
 });
 
 // ---------------------------------------------------------------- repositories
@@ -138,7 +153,11 @@ final locationRepositoryProvider = Provider<LocationRepository>((ref) {
 /// Keeps the upload queue ticking while it is watched (the home screen watches it).
 final uploadTickerProvider = Provider<void>((ref) {
   final runs = ref.watch(runRepositoryProvider);
-  final timer = Timer.periodic(const Duration(seconds: 5), (_) => unawaited(runs.tickUploads()));
+  final policy = ref.watch(sessionExpiryPolicyProvider);
+  final timer = Timer.periodic(const Duration(seconds: 5), (_) {
+    policy.recheck();
+    unawaited(runs.tickUploads());
+  });
   ref.onDispose(timer.cancel);
   unawaited(runs.tickUploads());
 });
