@@ -6,6 +6,9 @@ abstract class RunService {
   Future<void> start();
   Future<void> updateText(String text);
   Future<void> stop();
+
+  /// Stops a service left over from a previous process, if one is running.
+  Future<void> stopIfRunning();
 }
 
 /// Call once from main() before runApp.
@@ -27,6 +30,9 @@ void initForegroundTask() {
       autoRunOnBoot: false,
       allowWakeLock: true,
       allowWifiLock: false,
+      // The recorder lives in the main isolate, so a restarted empty service would be useless.
+      allowAutoRestart: false,
+      stopWithTask: true,
     ),
   );
 }
@@ -46,19 +52,23 @@ class LooprunTaskHandler extends TaskHandler {
   void onRepeatEvent(DateTime timestamp) {}
 
   @override
-  Future<void> onDestroy(DateTime timestamp) async {}
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
 }
 
 class AndroidRunService implements RunService {
   @override
   Future<void> start() async {
     if (await FlutterForegroundTask.isRunningService) return;
-    await FlutterForegroundTask.startService(
+    final result = await FlutterForegroundTask.startService(
       serviceId: 4711,
+      serviceTypes: [ForegroundServiceTypes.location],
       notificationTitle: 'Looprun',
       notificationText: 'Recording your run',
       callback: looprunServiceCallback,
     );
+    if (result is ServiceRequestFailure) {
+      throw StateError('Could not start the recording service: ${result.error}');
+    }
   }
 
   @override
@@ -73,5 +83,12 @@ class AndroidRunService implements RunService {
   @override
   Future<void> stop() async {
     await FlutterForegroundTask.stopService();
+  }
+
+  @override
+  Future<void> stopIfRunning() async {
+    if (await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.stopService();
+    }
   }
 }

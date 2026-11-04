@@ -1,6 +1,6 @@
 import 'geo.dart';
 
-enum RecorderStatus { idle, recording, paused, finished }
+enum RecorderStatus { idle, recording, paused, stopping, finished }
 
 /// One GPS fix as seen by the recorder (independent of any plugin type).
 class GeoFix {
@@ -18,7 +18,10 @@ class GeoFix {
   final bool isMock;
 }
 
-/// Pure Dart state machine for one run: idle -> recording <-> paused -> finished -> (reset) idle.
+/// Pure Dart state machine for one run:
+/// idle -> recording <-> paused -> stopping -> finished -> (reset) idle.
+/// `stopping` means no new fixes are accepted but the last database write may still be in flight;
+/// the caller calls [finish] once that write is done.
 /// No Flutter imports, so it is unit testable. Illegal transitions throw [StateError].
 class RunRecorder {
   RunRecorder({
@@ -89,18 +92,27 @@ class RunRecorder {
     _status = RecorderStatus.recording;
   }
 
-  void finish() {
+  /// recording or paused -> stopping. Fixes are no longer accepted.
+  void stop() {
     if (!isActive) {
-      throw StateError('Cannot finish from $_status');
+      throw StateError('Cannot stop from $_status');
     }
     if (_status == RecorderStatus.recording) _closeSegment();
     _endedAt = _nowMs();
+    _status = RecorderStatus.stopping;
+  }
+
+  /// stopping -> finished. Call after the last fix has been written to the database.
+  void finish() {
+    if (_status != RecorderStatus.stopping) {
+      throw StateError('Cannot finish from $_status');
+    }
     _status = RecorderStatus.finished;
   }
 
-  /// finished -> idle (or idle -> idle). Not allowed while a run is active.
+  /// Back to idle. Not allowed while a run is active or stopping.
   void reset() {
-    if (isActive) {
+    if (isActive || _status == RecorderStatus.stopping) {
       throw StateError('Cannot reset from $_status');
     }
     _status = RecorderStatus.idle;

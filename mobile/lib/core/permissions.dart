@@ -1,5 +1,5 @@
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 /// Wraps runtime permission prompts so screens (and tests) never talk to plugins directly.
 abstract class PermissionGateway {
@@ -27,7 +27,7 @@ class DevicePermissionGateway implements PermissionGateway {
     final granted = p == LocationPermission.always || p == LocationPermission.whileInUse;
     if (granted) {
       try {
-        await Permission.notification.request();
+        await FlutterForegroundTask.requestNotificationPermission();
       } catch (_) {
         // Notification permission is best effort; the service still runs without it.
       }

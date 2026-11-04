@@ -22,10 +22,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _busy = false;
 
   void _toast(String text) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   Future<void> _run(Future<void> Function() action) async {
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       await action();
@@ -67,6 +69,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _freeze(int days) {
     return _run(() async {
       final until = await ref.read(apiClientProvider).setFreeze(days);
+      if (!mounted) return;
       setState(() => _freezeUntil = until);
       _toast(days == 0 ? 'Freeze ended.' : 'Your cells will not decay for $days days.');
     });

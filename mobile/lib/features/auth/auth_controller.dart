@@ -77,6 +77,7 @@ class AuthController extends Notifier<AuthState> {
 
   /// Development only: the server accepts "dev:<name>" when LOOPRUN_DEV_AUTH=1.
   Future<void> signInDev(String name) async {
+    if (!ref.read(devAuthEnabledProvider)) return;
     state = const AuthState(status: AuthStatus.signedOut, busy: true);
     try {
       await _exchange('dev:$name');

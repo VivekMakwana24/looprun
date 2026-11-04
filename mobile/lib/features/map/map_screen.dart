@@ -21,11 +21,11 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
-  MaplibreMapController? _controller;
+  MapLibreMapController? _controller;
   String? _notice = 'Zoom in to see claimed cells';
   bool _loading = false;
 
-  Future<void> _onMapCreated(MaplibreMapController c) async {
+  Future<void> _onMapCreated(MapLibreMapController c) async {
     _controller = c;
     await _centerOnMe();
   }
@@ -63,11 +63,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final bbox = '${centerLng - halfLng},${centerLat - halfLat},${centerLng + halfLng},${centerLat + halfLat}';
 
       final cells = await ref.read(apiClientProvider).getCells(bbox);
-      final locator = ref.read(cellLocatorProvider);
       final options = <CircleOptions>[];
       for (final cell in cells) {
-        final center = locator.centerOf(cell.id);
-        if (center == null) continue;
+        final lat = cell.lat, lng = cell.lng;
+        if (lat == null || lng == null) continue;
         final String color;
         if (cell.mine) {
           color = '#1B8A5A';
@@ -77,7 +76,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           color = '#E5701B';
         }
         options.add(CircleOptions(
-          geometry: LatLng(center.lat, center.lng),
+          geometry: LatLng(lat, lng),
           circleRadius: 7,
           circleColor: color,
           circleOpacity: 0.75,
@@ -103,11 +102,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        MaplibreMap(
+        MapLibreMap(
           styleString: AppConfig.mapStyleUrl,
           initialCameraPosition: const CameraPosition(target: LatLng(50.0, 8.7), zoom: 13),
           onMapCreated: _onMapCreated,
+          onStyleLoadedCallback: _refreshCells,
           onCameraIdle: _refreshCells,
+          trackCameraPosition: true,
           compassEnabled: true,
         ),
         Positioned(

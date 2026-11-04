@@ -72,6 +72,9 @@ class RunController extends Notifier<RunUiState> {
   Timer? _timer;
   GpsHealth _notified = GpsHealth.inactive;
 
+  /// Database writes of fixes that are still in flight (the run is only finished after they complete).
+  final List<Future<void>> _pending = [];
+
   @override
   RunUiState build() {
     _recorder = RunRecorder(nowMs: _now, newId: () => const Uuid().v4());
@@ -84,8 +87,9 @@ class RunController extends Notifier<RunUiState> {
 
   /// Called only from the visible Run screen when the user taps Start.
   Future<void> start() async {
-    if (state.isActive) return;
+    if (state.isActive || state.status == RecorderStatus.stopping) return;
     state = state.copyWith(clearError: true);
+    String? createdRunId;
     try {
       final granted = await ref.read(permissionGatewayProvider).requestLocation();
       if (!granted) {
@@ -102,6 +106,7 @@ class RunController extends Notifier<RunUiState> {
       _recorder.start();
       final runId = _recorder.runId!;
       await ref.read(databaseProvider).createRun(runId, _recorder.startedAt!);
+      createdRunId = runId;
       await ref.read(runServiceProvider).start();
       _health.start(_now());
       _notified = GpsHealth.searching;
@@ -120,8 +125,15 @@ class RunController extends Notifier<RunUiState> {
       );
     } catch (e) {
       await _teardown();
-      if (_recorder.isActive) _recorder.finish();
+      if (_recorder.isActive) _recorder.stop();
+      if (_recorder.status == RecorderStatus.stopping) _recorder.finish();
       _recorder.reset();
+      if (createdRunId != null) {
+        // Do not leave an empty "unfinished" run behind for the next launch.
+        try {
+          await ref.read(databaseProvider).discardRun(createdRunId);
+        } catch (_) {}
+      }
       state = RunUiState(error: 'Could not start the run: $e');
     }
   }
@@ -129,6 +141,7 @@ class RunController extends Notifier<RunUiState> {
   Future<void> _onPosition(Position p) async {
     final now = _now();
     _health.onFix(now);
+    if (_recorder.status != RecorderStatus.recording) return;
     final fix = GeoFix(
       lat: p.latitude,
       lng: p.longitude,
@@ -136,26 +149,34 @@ class RunController extends Notifier<RunUiState> {
       acc: p.accuracy,
       isMock: p.isMocked,
     );
-    if (!_recorder.addFix(fix)) return;
     final runId = _recorder.runId!;
+    // 1. Write to Drift first, before memory or UI change.
+    final write = ref.read(databaseProvider).addFix(
+          runId: runId,
+          lat: fix.lat,
+          lng: fix.lng,
+          t: fix.t,
+          acc: fix.acc,
+          isMock: fix.isMock,
+        );
+    final tracked = write.then<void>((_) {}, onError: (Object _) {});
+    _pending.add(tracked);
+    try {
+      await write;
+    } catch (e) {
+      state = state.copyWith(error: 'Could not save a GPS point: $e');
+      return; // do not count what was not stored
+    } finally {
+      _pending.remove(tracked);
+    }
+    // 2. Then memory and UI.
+    if (!_recorder.addFix(fix)) return;
     final path = List<PathPoint>.of(state.path)..add(PathPoint(fix.lat, fix.lng));
     state = state.copyWith(
       distanceM: _recorder.distanceM,
       health: _health.evaluate(now),
       path: path,
     );
-    try {
-      await ref.read(databaseProvider).addFix(
-            runId: runId,
-            lat: fix.lat,
-            lng: fix.lng,
-            t: fix.t,
-            acc: fix.acc,
-            isMock: fix.isMock,
-          );
-    } catch (e) {
-      state = state.copyWith(error: 'Could not save a GPS point: $e');
-    }
   }
 
   void _onStreamError(Object error) {
@@ -193,16 +214,21 @@ class RunController extends Notifier<RunUiState> {
     state = state.copyWith(status: RecorderStatus.recording);
   }
 
-  /// Stops recording, marks the run complete locally and queues it for upload.
+  /// Stops recording, waits for the last database write, marks the run complete locally and queues it.
   Future<void> stop() async {
     if (!state.isActive) return;
     final db = ref.read(databaseProvider);
     final runId = _recorder.runId!;
+    _recorder.stop(); // stopping: no new fixes are accepted
+    state = state.copyWith(status: RecorderStatus.stopping, elapsedMs: _recorder.elapsedMs);
     await _teardown();
-    _recorder.finish();
-    final fixCount = _recorder.fixCount;
+    // Wait for fixes whose write is still running, so the last point is not lost.
+    await Future.wait(List<Future<void>>.of(_pending));
+    final storedFixes = (await db.fixesFor(runId)).length;
     final endedAt = _recorder.endedAt ?? _now();
-    if (fixCount < 2) {
+    final elapsed = _recorder.elapsedMs;
+    _recorder.finish();
+    if (storedFixes < 2) {
       await db.discardRun(runId);
       _recorder.reset();
       state = const RunUiState(error: 'That run was too short to save (no GPS points recorded).');
@@ -213,9 +239,9 @@ class RunController extends Notifier<RunUiState> {
       status: RecorderStatus.finished,
       health: GpsHealth.inactive,
       finishedRunId: runId,
-      elapsedMs: _recorder.elapsedMs,
+      elapsedMs: elapsed,
     );
-    unawaited(ref.read(uploadQueueProvider).tick());
+    unawaited(ref.read(uploadQueueProvider).tick().catchError((Object _) => 0));
   }
 
   /// Called by the screen after it has opened the result screen.

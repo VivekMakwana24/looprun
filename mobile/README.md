@@ -8,7 +8,7 @@ The phone records GPS and shows the map. The server decides loops, cells, owners
 
 ## Build
 
-Requires Flutter stable (3.22 or newer recommended), JDK 17, Android SDK.
+Requires Flutter stable 3.47.x (Dart 3.12+), JDK 21 (maplibre_gl needs it), Android SDK.
 
 ```bash
 cd mobile
@@ -35,6 +35,8 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 --dart-define=DEV_AU
 | `API_BASE_URL` | `http://10.0.2.2:8000` | Server origin; `/v1` is appended |
 | `DEV_AUTH` | `false` | Shows the dev login (`id_token = "dev:<name>"`) on the sign-in screen |
 | `GOOGLE_SERVER_CLIENT_ID` | empty | Web OAuth client id, so Google returns an ID token the server can verify |
+| `MAP_TILE_PROVIDER` | placeholder | Name shown in the location disclosure (must be real in release) |
+| `PRIVACY_POLICY_URL` | placeholder | URL shown in the location disclosure (must be real in release) |
 | `MAP_STYLE_URL` | MapLibre demo tiles | MapLibre style JSON URL |
 
 Google sign-in on Android also needs an OAuth client of type Android (package `app.looprun.looprun`
@@ -43,7 +45,7 @@ plus the signing key SHA-1) in the same Google Cloud project. That is console co
 ## Layout
 
 ```
-lib/core/       config, providers, permissions, token store, theme, formatting, H3 cell locator
+lib/core/       config, providers, permissions, token store, theme, formatting
 lib/data/api/   Dio client + plain Dart models for the contract
 lib/data/db/    Drift database (runs, fixes)
 lib/data/upload/ backoff policy, upload queue (pure Dart), Drift-backed store

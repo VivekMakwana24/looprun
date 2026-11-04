@@ -114,6 +114,9 @@ class UploadQueue {
       await _onStatus(job, status, now);
     } on ApiException catch (e) {
       await _onError(job, e, now);
+    } catch (e) {
+      // Unexpected (missing run row, malformed body): fail this job only, keep the others going.
+      await store.saveJob(job.copyWith(stage: UploadStage.failed, lastError: 'Unexpected error: $e'));
     }
   }
 

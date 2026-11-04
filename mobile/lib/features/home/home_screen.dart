@@ -5,6 +5,7 @@ import '../../core/providers.dart';
 import '../map/map_screen.dart';
 import '../profile/profile_screen.dart';
 import '../run/recovery.dart';
+import '../run/run_controller.dart';
 import '../run/run_screen.dart';
 import '../run_result/run_result_screen.dart';
 
@@ -26,14 +27,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   /// Crash recovery: a run that was still "recording" when the app started was interrupted.
   Future<void> _checkRecovery() async {
+    // A run recorded by this very process is not an interrupted one.
+    if (ref.read(runControllerProvider).isActive) return;
     final db = ref.read(databaseProvider);
+    // A service left over from a previous process must not keep showing "Recording".
+    try {
+      await ref.read(runServiceProvider).stopIfRunning();
+    } catch (_) {}
     final run = await db.unfinishedRun();
     if (run == null || !mounted) return;
-    // The foreground service may have outlived the process.
-    try {
-      await ref.read(runServiceProvider).stop();
-    } catch (_) {}
-    if (!mounted) return;
+    if (ref.read(runControllerProvider).isActive) return;
     final finish = await showDialog<bool>(
       context: context,
       barrierDismissible: false,

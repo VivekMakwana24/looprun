@@ -10,8 +10,8 @@ import '../data/upload/drift_upload_store.dart';
 import '../data/upload/upload_queue.dart';
 import '../features/auth/auth_controller.dart';
 import '../features/run/foreground_service.dart';
+import '../features/run/run_controller.dart';
 import 'config.dart';
-import 'h3_cells.dart';
 import 'permissions.dart';
 import 'token_store.dart';
 
@@ -30,8 +30,6 @@ final permissionGatewayProvider =
 
 final runServiceProvider = Provider<RunService>((ref) => AndroidRunService());
 
-final cellLocatorProvider = Provider<CellLocator>((ref) => H3FlutterCellLocator());
-
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase(openLooprunConnection());
   ref.onDispose(db.close);
@@ -43,6 +41,8 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     baseUrl: AppConfig.apiBaseUrl,
     tokenProvider: () => ref.read(authProvider).token,
     onUnauthorized: () {
+      // Do not sign the user out in the middle of a run; the next request after the run will retry.
+      if (ref.read(runControllerProvider).isActive) return;
       if (ref.read(authProvider).status == AuthStatus.signedIn) {
         ref.read(authProvider.notifier).signOut();
       }
@@ -61,8 +61,8 @@ final uploadQueueProvider = Provider<UploadQueue>((ref) {
 final uploadTickerProvider = Provider<void>((ref) {
   final queue = ref.watch(uploadQueueProvider);
   final timer = Timer.periodic(const Duration(seconds: 5), (_) {
-    queue.tick();
+    unawaited(queue.tick().catchError((Object _) => 0));
   });
   ref.onDispose(timer.cancel);
-  queue.tick();
+  unawaited(queue.tick().catchError((Object _) => 0));
 });

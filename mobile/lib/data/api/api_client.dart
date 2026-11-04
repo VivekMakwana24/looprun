@@ -40,6 +40,12 @@ class ApiClient implements RunsApi {
       final code = e.response?.statusCode;
       if (code == 401) _onUnauthorized?.call();
       throw ApiException(code, _messageOf(e));
+    } on ApiException {
+      rethrow;
+    } on TypeError catch (e) {
+      throw ApiException(null, 'Unexpected response: $e');
+    } on FormatException catch (e) {
+      throw ApiException(null, 'Unexpected response: ${e.message}');
     }
   }
 

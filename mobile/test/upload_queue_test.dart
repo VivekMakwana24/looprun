@@ -50,6 +50,28 @@ class FakeApi implements RunsApi {
   }
 }
 
+/// Throws a non-API error for one run id, like a missing database row would.
+class BrokenPayloadStore implements UploadStore {
+  BrokenPayloadStore(this.inner, this.brokenId);
+  final FakeStore inner;
+  final String brokenId;
+
+  @override
+  Future<List<UploadJob>> activeJobs() => inner.activeJobs();
+
+  @override
+  Future<UploadJob?> getJob(String runId) => inner.getJob(runId);
+
+  @override
+  Future<void> saveJob(UploadJob job) => inner.saveJob(job);
+
+  @override
+  Future<RunUpload> buildPayload(String runId) {
+    if (runId == brokenId) throw StateError('Run $runId not found');
+    return inner.buildPayload(runId);
+  }
+}
+
 RunStatus st(String status) => RunStatus(id: 'r1', status: status);
 
 void main() {
@@ -144,6 +166,17 @@ void main() {
     expect(job.lastError, 'bad fixes');
     now += 1000000;
     expect(await queue.tick(), 0);
+  });
+
+  test('an unexpected error fails that job only and does not escape tick', () async {
+    store.jobs['r2'] = const UploadJob(runId: 'r2', stage: UploadStage.queued);
+    api.uploadResults.add(st('accepted'));
+    final broken = BrokenPayloadStore(store, 'r1');
+    queue = UploadQueue(store: broken, api: api, nowMs: () => now);
+    await queue.tick();
+    expect(store.jobs['r1']!.stage, UploadStage.failed);
+    expect(store.jobs['r1']!.lastError, contains('Unexpected error'));
+    expect(store.jobs['r2']!.stage, UploadStage.done);
   });
 
   test('gives up after maxAttempts', () async {

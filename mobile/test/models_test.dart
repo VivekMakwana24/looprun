@@ -63,11 +63,15 @@ void main() {
   test('Cell parses owner, hidden and mine', () {
     final mine = Cell.fromJson({
       'id': '8a1f',
+      'lat': 50.1,
+      'lng': 8.7,
       'owner': {'id': 'u1', 'name': 'Ann'},
       'mine': true,
       'hidden': false,
     });
     expect(mine.mine, isTrue);
+    expect(mine.lat, 50.1);
+    expect(mine.lng, 8.7);
     expect(mine.owner!.name, 'Ann');
     final hidden = Cell.fromJson({'id': '8a20', 'owner': null, 'mine': false, 'hidden': true});
     expect(hidden.owner, isNull);

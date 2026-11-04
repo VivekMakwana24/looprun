@@ -43,7 +43,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(DisclosureScreen), findsOneWidget);
-    expect(find.textContaining('Only while a run is active'), findsOneWidget);
+    expect(find.text(disclosureCollect), findsOneWidget);
+    expect(find.text(disclosureWhen), findsOneWidget);
+    expect(find.textContaining('switch to another app'), findsOneWidget);
+    expect(find.byKey(const Key('disclosure_privacy_link')), findsOneWidget);
     expect(gateway.requests, 0);
   });
 

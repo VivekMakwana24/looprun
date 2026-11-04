@@ -5,11 +5,13 @@ class AppConfig {
   static const bool devAuth = bool.fromEnvironment('DEV_AUTH', defaultValue: false);
   static const String googleServerClientId =
       String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID', defaultValue: '');
+  /// Shown in the location disclosure. Set both for release builds.
+  static const String mapTileProvider =
+      String.fromEnvironment('MAP_TILE_PROVIDER', defaultValue: '[MAP_TILE_PROVIDER]');
+  static const String privacyPolicyUrl =
+      String.fromEnvironment('PRIVACY_POLICY_URL', defaultValue: '[PRIVACY_POLICY_URL]');
   static const String mapStyleUrl = String.fromEnvironment(
     'MAP_STYLE_URL',
     defaultValue: 'https://demotiles.maplibre.org/style.json',
   );
-
-  /// H3 resolution used by the server for cells.
-  static const int h3Resolution = 10;
 }

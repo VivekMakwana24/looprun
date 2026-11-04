@@ -35,10 +35,13 @@ else
   trap 'rm -f "$TMP"' EXIT
   awk -v mark="$MARK" '
     NR == 1 {
-      print "// " mark ": keystore properties (added by mobile/tool/patch_signing.sh)"
+      print "// " mark ": imports (added by mobile/tool/patch_signing.sh)"
       print "import java.io.FileInputStream"
       print "import java.util.Properties"
       print ""
+    }
+    /^android \{/ {
+      print "// " mark ": keystore properties (must come after the plugins block)"
       print "val keystoreProperties = Properties()"
       print "val keystorePropertiesFile = rootProject.file(\"key.properties\")"
       print "if (keystorePropertiesFile.exists()) {"

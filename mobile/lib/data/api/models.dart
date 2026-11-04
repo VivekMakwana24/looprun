@@ -150,8 +150,19 @@ class RunStatus {
 }
 
 class Cell {
-  const Cell({required this.id, this.owner, this.mine = false, this.hidden = false});
+  const Cell({
+    required this.id,
+    this.lat,
+    this.lng,
+    this.owner,
+    this.mine = false,
+    this.hidden = false,
+  });
   final String id;
+
+  /// Cell centre, computed by the server (decision D7).
+  final double? lat;
+  final double? lng;
   final UserRef? owner;
   final bool mine;
   final bool hidden;
@@ -160,6 +171,8 @@ class Cell {
     final o = j['owner'];
     return Cell(
       id: (j['id'] ?? '').toString(),
+      lat: _d(j['lat']),
+      lng: _d(j['lng']),
       owner: o is Map ? UserRef.fromJson(o.cast<String, dynamic>()) : null,
       mine: j['mine'] == true,
       hidden: j['hidden'] == true,
