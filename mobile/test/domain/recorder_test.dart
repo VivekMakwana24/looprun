@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:looprun/recorder/run_recorder.dart';
+import 'package:looprun/domain/recorder/run_recorder.dart';
 
 void main() {
   late int now;

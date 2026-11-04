@@ -1,11 +1,32 @@
 import 'package:dio/dio.dart';
 
+import '../models/api_exception.dart';
+import '../models/models.dart';
 import '../upload/upload_queue.dart';
-import 'api_exception.dart';
-import 'models.dart';
 
-class ApiClient implements RunsApi {
-  ApiClient({
+/// Every call to the Looprun server (docs/CONTRACT.openapi.yaml). Stateless apart from the token lookup;
+/// repositories decide what to keep. Tests use a fake implementation.
+abstract class ApiService implements RunsApi {
+  Future<Session> authGoogle(String idToken);
+
+  /// bbox is "minLng,minLat,maxLng,maxLat"; the server rejects sides over 0.2 degrees.
+  Future<List<Cell>> getCells(String bbox);
+
+  Future<Leaderboard> weeklyLeaderboard();
+
+  Future<void> putHomeZones(List<HomeZone> zones);
+
+  /// Returns freeze_until (epoch ms) or null when no freeze is active.
+  Future<int?> setFreeze(int days);
+
+  Future<void> deleteAccount();
+
+  /// kind is "run" or "cell"; reason is at most 500 characters.
+  Future<void> report({required String kind, required String targetId, required String reason});
+}
+
+class DioApiService implements ApiService {
+  DioApiService({
     required String baseUrl,
     required String? Function() tokenProvider,
     void Function()? onUnauthorized,
@@ -57,6 +78,7 @@ class ApiClient implements RunsApi {
 
   Map<String, dynamic> _map(Object? data) => (data as Map).cast<String, dynamic>();
 
+  @override
   Future<Session> authGoogle(String idToken) => _guard(() async {
         final res = await _dio.post('/auth/google', data: {'id_token': idToken});
         return Session.fromJson(_map(res.data));
@@ -74,30 +96,39 @@ class ApiClient implements RunsApi {
         return RunStatus.fromJson(_map(res.data));
       });
 
-  /// bbox is "minLng,minLat,maxLng,maxLat"; the server rejects sides over 0.2 degrees.
+  @override
   Future<List<Cell>> getCells(String bbox) => _guard(() async {
         final res = await _dio.get('/cells', queryParameters: {'bbox': bbox});
         final list = (_map(res.data)['cells'] as List?) ?? const [];
         return list.map((e) => Cell.fromJson((e as Map).cast<String, dynamic>())).toList();
       });
 
+  @override
   Future<Leaderboard> weeklyLeaderboard() => _guard(() async {
         final res = await _dio.get('/leaderboard/weekly');
         return Leaderboard.fromJson(_map(res.data));
       });
 
+  @override
   Future<void> putHomeZones(List<HomeZone> zones) => _guard(() async {
         await _dio.put('/me/home-zones', data: {'zones': zones.map((z) => z.toJson()).toList()});
       });
 
-  /// Returns freeze_until (epoch ms) or null when no freeze is active.
+  @override
   Future<int?> setFreeze(int days) => _guard(() async {
         final res = await _dio.post('/me/freeze', data: {'days': days});
         final v = _map(res.data)['freeze_until'];
         return v is num ? v.toInt() : null;
       });
 
+  @override
   Future<void> deleteAccount() => _guard(() async {
         await _dio.delete('/me');
+      });
+
+  @override
+  Future<void> report({required String kind, required String targetId, required String reason}) =>
+      _guard(() async {
+        await _dio.post('/reports', data: {'kind': kind, 'target_id': targetId, 'reason': reason});
       });
 }

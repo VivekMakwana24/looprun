@@ -1,5 +1,5 @@
-import '../api/api_exception.dart';
-import '../api/models.dart';
+import '../models/api_exception.dart';
+import '../models/models.dart';
 import 'backoff.dart';
 
 enum UploadStage { queued, processing, done, failed }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:looprun/core/providers.dart';
-import 'package:looprun/core/token_store.dart';
+import 'package:looprun/data/services/token_store.dart';
 import 'package:looprun/features/auth/sign_in_screen.dart';
 
 Widget _app({required bool devAuth}) {

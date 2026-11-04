@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:looprun/app.dart';
-import 'package:looprun/core/permissions.dart';
+import 'package:looprun/data/services/permission_service.dart';
 import 'package:looprun/core/providers.dart';
-import 'package:looprun/core/token_store.dart';
+import 'package:looprun/data/services/token_store.dart';
 import 'package:looprun/features/disclosure/disclosure_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class FakeGateway implements PermissionGateway {
+class FakeGateway implements PermissionService {
   int requests = 0;
 
   @override

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
-import '../../data/api/models.dart';
+import '../../data/models/models.dart';
 
 const String _key = 'home_zones_v1';
 const int maxHomeZones = 5;

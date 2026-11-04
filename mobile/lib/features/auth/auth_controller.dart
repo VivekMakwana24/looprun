@@ -3,9 +3,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../core/config.dart';
 import '../../core/providers.dart';
-import '../../core/token_store.dart';
-import '../../data/api/api_exception.dart';
-import '../../data/api/models.dart';
+import '../../data/services/token_store.dart';
+import '../../data/models/api_exception.dart';
+import '../../data/models/models.dart';
 
 enum AuthStatus { unknown, signedOut, signedIn }
 

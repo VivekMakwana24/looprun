@@ -112,6 +112,9 @@ jobs:
       - name: Build debug APK
         working-directory: mobile
         run: flutter build apk --debug
+      - name: Fail if the merged manifest requests ACCESS_BACKGROUND_LOCATION (F11)
+        working-directory: mobile
+        run: bash tool/check_manifest.sh
       - uses: actions/upload-artifact@v4
         with:
           name: looprun-debug-apk

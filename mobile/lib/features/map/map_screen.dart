@@ -7,7 +7,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../core/config.dart';
 import '../../core/providers.dart';
-import '../../data/api/api_exception.dart';
+import '../../data/models/api_exception.dart';
 import '../leaderboard/leaderboard_sheet.dart';
 
 const double _minZoomForCells = 12.5;

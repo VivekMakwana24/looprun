@@ -12,3 +12,10 @@ double haversineM(double lat1, double lng1, double lat2, double lng2) {
       math.cos(_rad(lat1)) * math.cos(_rad(lat2)) * math.pow(math.sin(dLng / 2), 2);
   return 2 * earthRadiusM * math.asin(math.min(1.0, math.sqrt(a.toDouble())));
 }
+
+/// A point of the recorded path, for drawing.
+class PathPoint {
+  const PathPoint(this.lat, this.lng);
+  final double lat;
+  final double lng;
+}

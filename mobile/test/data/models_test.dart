@@ -1,8 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:looprun/core/format.dart';
-import 'package:looprun/data/api/models.dart';
+import 'package:looprun/data/models/models.dart';
 
 void main() {
+  liveFrameTests();
   test('RunStatus parses a processing response with nulls', () {
     final s = RunStatus.fromJson({
       'id': 'abc',
@@ -128,5 +129,37 @@ void main() {
     expect(formatDistance(1234), '1.23 km');
     expect(formatDuration(65000), '01:05');
     expect(formatDuration(3725000), '1:02:05');
+  });
+}
+
+void liveFrameTests() {
+  test('CellChange parses a cell_changed frame', () {
+    final c = CellChange.tryParse({
+      'type': 'cell_changed',
+      'cell': '8a1f',
+      'lat': 50.1,
+      'lng': 8.6,
+      'owner': {'id': 'u1', 'name': 'Ann'},
+      'mine': true,
+    });
+    expect(c!.id, '8a1f');
+    expect(c.owner!.name, 'Ann');
+    expect(c.mine, isTrue);
+    expect(c.toCell().hidden, isFalse);
+  });
+
+  test('CellChange without owner becomes a hidden cell; junk is ignored', () {
+    final c = CellChange.tryParse({
+      'type': 'cell_changed',
+      'cell': 'x',
+      'lat': 1,
+      'lng': 2,
+      'owner': null,
+      'mine': false,
+    });
+    expect(c!.toCell().hidden, isTrue);
+    expect(CellChange.tryParse({'type': 'ping'}), isNull);
+    expect(CellChange.tryParse('nope'), isNull);
+    expect(CellChange.tryParse({'type': 'cell_changed', 'cell': 'x'}), isNull);
   });
 }

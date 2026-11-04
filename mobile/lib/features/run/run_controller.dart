@@ -5,8 +5,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/providers.dart';
-import '../../recorder/gps_health.dart';
-import '../../recorder/run_recorder.dart';
+import '../../domain/recorder/gps_health.dart';
+import '../../domain/recorder/run_recorder.dart';
 
 class PathPoint {
   const PathPoint(this.lat, this.lng);

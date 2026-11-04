@@ -1,4 +1,4 @@
-import '../data/api/models.dart';
+import '../data/models/models.dart';
 
 String formatDistance(double meters) {
   if (meters < 1000) return '${meters.round()} m';

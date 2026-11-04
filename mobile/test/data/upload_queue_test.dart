@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:looprun/data/api/api_exception.dart';
-import 'package:looprun/data/api/models.dart';
+import 'package:looprun/data/models/api_exception.dart';
+import 'package:looprun/data/models/models.dart';
 import 'package:looprun/data/upload/backoff.dart';
 import 'package:looprun/data/upload/upload_queue.dart';
 

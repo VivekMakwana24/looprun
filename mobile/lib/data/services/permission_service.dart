@@ -2,7 +2,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 /// Wraps runtime permission prompts so screens (and tests) never talk to plugins directly.
-abstract class PermissionGateway {
+abstract class PermissionService {
   /// True when foreground location permission is already granted. Never prompts.
   Future<bool> hasLocation();
 
@@ -11,7 +11,7 @@ abstract class PermissionGateway {
   Future<bool> requestLocation();
 }
 
-class DevicePermissionGateway implements PermissionGateway {
+class DevicePermissionService implements PermissionService {
   @override
   Future<bool> hasLocation() async {
     final p = await Geolocator.checkPermission();

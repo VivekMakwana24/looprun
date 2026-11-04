@@ -12,6 +12,12 @@ class UserRef {
       UserRef(id: (j['id'] ?? '').toString(), name: (j['name'] ?? '').toString());
 
   Map<String, dynamic> toJson() => {'id': id, 'name': name};
+
+  @override
+  bool operator ==(Object other) => other is UserRef && other.id == id && other.name == name;
+
+  @override
+  int get hashCode => Object.hash(id, name);
 }
 
 class Session {
@@ -219,4 +225,113 @@ class HomeZone {
       );
 
   Map<String, dynamic> toJson() => {'lat': lat, 'lng': lng, 'radius_m': radiusM};
+
+  @override
+  bool operator ==(Object other) =>
+      other is HomeZone && other.lat == lat && other.lng == lng && other.radiusM == radiusM;
+
+  @override
+  int get hashCode => Object.hash(lat, lng, radiusM);
+}
+
+/// A signed-in session (the token is kept in memory and in secure storage).
+class AuthSession {
+  const AuthSession({required this.token, required this.user});
+  final String token;
+  final UserRef user;
+
+  @override
+  bool operator ==(Object other) =>
+      other is AuthSession && other.token == token && other.user == user;
+
+  @override
+  int get hashCode => Object.hash(token, user);
+}
+
+/// A run as stored on this phone (the local database is the source of truth for runs).
+/// state: recording | paused | finished. upload: none | queued | processing | done | failed.
+class RunSummary {
+  const RunSummary({
+    required this.id,
+    required this.startedAt,
+    this.endedAt,
+    this.state = 'recording',
+    this.upload = 'none',
+    this.attempts = 0,
+    this.lastError,
+    this.result,
+  });
+
+  final String id;
+  final int startedAt;
+  final int? endedAt;
+  final String state;
+  final String upload;
+  final int attempts;
+  final String? lastError;
+
+  /// Last server answer, if any.
+  final RunStatus? result;
+
+  bool get uploadFailed => upload == 'failed';
+  bool get uploadQueued => upload == 'queued';
+
+  @override
+  bool operator ==(Object other) =>
+      other is RunSummary &&
+      other.id == id &&
+      other.startedAt == startedAt &&
+      other.endedAt == endedAt &&
+      other.state == state &&
+      other.upload == upload &&
+      other.attempts == attempts &&
+      other.lastError == lastError &&
+      other.result?.status == result?.status;
+
+  @override
+  int get hashCode =>
+      Object.hash(id, startedAt, endedAt, state, upload, attempts, lastError, result?.status);
+}
+
+/// One `cell_changed` frame from the /live WebSocket.
+class CellChange {
+  const CellChange({
+    required this.id,
+    required this.lat,
+    required this.lng,
+    required this.owner,
+    required this.mine,
+  });
+
+  final String id;
+  final double lat;
+  final double lng;
+
+  /// Null when the cell has no visible owner: it is free, or its owner is hidden by privacy rules.
+  final UserRef? owner;
+  final bool mine;
+
+  /// Returns null if the frame is not a well-formed cell_changed message.
+  static CellChange? tryParse(Object? decoded) {
+    if (decoded is! Map) return null;
+    final j = decoded.cast<String, dynamic>();
+    if (j['type'] != 'cell_changed') return null;
+    final id = j['cell'];
+    final lat = _d(j['lat']);
+    final lng = _d(j['lng']);
+    if (id is! String || lat == null || lng == null) return null;
+    final o = j['owner'];
+    return CellChange(
+      id: id,
+      lat: lat,
+      lng: lng,
+      owner: o is Map ? UserRef.fromJson(o.cast<String, dynamic>()) : null,
+      mine: j['mine'] == true,
+    );
+  }
+
+  /// The server never sends a hidden cell's owner, so a change without owner is drawn as private
+  /// (grey) until the next REST refresh shows whether the cell is free.
+  Cell toCell() =>
+      Cell(id: id, lat: lat, lng: lng, owner: owner, mine: mine, hidden: owner == null);
 }

@@ -3,17 +3,17 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../data/api/api_client.dart';
+import '../data/services/api_service.dart';
 import '../data/db/app_database.dart';
 import '../data/db/connection.dart';
 import '../data/upload/drift_upload_store.dart';
 import '../data/upload/upload_queue.dart';
 import '../features/auth/auth_controller.dart';
-import '../features/run/foreground_service.dart';
+import '../data/services/foreground_service.dart';
 import '../features/run/run_controller.dart';
 import 'config.dart';
-import 'permissions.dart';
-import 'token_store.dart';
+import '../data/services/permission_service.dart';
+import '../data/services/token_store.dart';
 
 /// Overridden in main() (and in tests) with the loaded instance.
 final prefsProvider = Provider<SharedPreferences>(
@@ -26,9 +26,9 @@ final tokenStoreProvider = Provider<TokenStore>((ref) => SecureTokenStore());
 final devAuthEnabledProvider = Provider<bool>((ref) => AppConfig.devAuth);
 
 final permissionGatewayProvider =
-    Provider<PermissionGateway>((ref) => DevicePermissionGateway());
+    Provider<PermissionService>((ref) => DevicePermissionService());
 
-final runServiceProvider = Provider<RunService>((ref) => AndroidRunService());
+final runServiceProvider = Provider<ForegroundService>((ref) => AndroidForegroundService());
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase(openLooprunConnection());
@@ -36,8 +36,8 @@ final databaseProvider = Provider<AppDatabase>((ref) {
   return db;
 });
 
-final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(
+final apiClientProvider = Provider<ApiService>((ref) {
+  return DioApiService(
     baseUrl: AppConfig.apiBaseUrl,
     tokenProvider: () => ref.read(authProvider).token,
     onUnauthorized: () {

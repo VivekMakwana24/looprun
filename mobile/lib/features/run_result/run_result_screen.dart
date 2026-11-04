@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
 import '../../core/providers.dart';
-import '../../data/api/models.dart';
+import '../../data/models/models.dart';
 import '../../data/db/app_database.dart';
 import '../../data/upload/upload_queue.dart';
 

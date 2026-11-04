@@ -1,18 +1,35 @@
+import 'dart:async';
+
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+
+/// Something the user did in the foreground notification.
+enum ForegroundAction { stop }
 
 /// Keeps the app process alive (Android foreground service, type location) while a run is recorded.
 /// GPS fixes are collected by the main isolate; this service only holds the process and the notification.
-abstract class RunService {
+abstract class ForegroundService {
   Future<void> start();
   Future<void> updateText(String text);
   Future<void> stop();
 
   /// Stops a service left over from a previous process, if one is running.
   Future<void> stopIfRunning();
+
+  /// Taps on the notification's buttons (currently only Stop).
+  Stream<ForegroundAction> get actions;
 }
+
+const String _stopButtonId = 'looprun_stop';
+const String _stopMessage = 'looprun_stop';
+
+const List<NotificationButton> _buttons = [
+  NotificationButton(id: _stopButtonId, text: 'Stop'),
+];
 
 /// Call once from main() before runApp.
 void initForegroundTask() {
+  // Lets the service isolate send data (the Stop button) to the main isolate.
+  FlutterForegroundTask.initCommunicationPort();
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
       channelId: 'looprun_recording',
@@ -43,7 +60,7 @@ void looprunServiceCallback() {
   FlutterForegroundTask.setTaskHandler(LooprunTaskHandler());
 }
 
-/// Does no work: location is read in the main isolate. It exists because the plugin requires a handler.
+/// Does no recording: location is read in the main isolate. It only forwards the Stop button press.
 class LooprunTaskHandler extends TaskHandler {
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {}
@@ -53,9 +70,33 @@ class LooprunTaskHandler extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
+
+  @override
+  void onNotificationButtonPressed(String id) {
+    if (id == _stopButtonId) {
+      FlutterForegroundTask.sendDataToMain(_stopMessage);
+    }
+  }
 }
 
-class AndroidRunService implements RunService {
+class AndroidForegroundService implements ForegroundService {
+  final StreamController<ForegroundAction> _actions =
+      StreamController<ForegroundAction>.broadcast();
+  bool _listening = false;
+
+  void _onTaskData(Object data) {
+    if (data == _stopMessage) _actions.add(ForegroundAction.stop);
+  }
+
+  @override
+  Stream<ForegroundAction> get actions {
+    if (!_listening) {
+      _listening = true;
+      FlutterForegroundTask.addTaskDataCallback(_onTaskData);
+    }
+    return _actions.stream;
+  }
+
   @override
   Future<void> start() async {
     if (await FlutterForegroundTask.isRunningService) return;
@@ -64,6 +105,7 @@ class AndroidRunService implements RunService {
       serviceTypes: [ForegroundServiceTypes.location],
       notificationTitle: 'Looprun',
       notificationText: 'Recording your run',
+      notificationButtons: _buttons,
       callback: looprunServiceCallback,
     );
     if (result is ServiceRequestFailure) {
@@ -77,6 +119,7 @@ class AndroidRunService implements RunService {
     await FlutterForegroundTask.updateService(
       notificationTitle: 'Looprun',
       notificationText: text,
+      notificationButtons: _buttons,
     );
   }
 

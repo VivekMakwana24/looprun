@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:looprun/recorder/gps_health.dart';
+import 'package:looprun/domain/recorder/gps_health.dart';
 
 void main() {
   test('inactive until started', () {

@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../core/providers.dart';
-import '../../data/api/api_exception.dart';
-import '../../data/api/models.dart';
+import '../../data/models/api_exception.dart';
+import '../../data/models/models.dart';
 import '../auth/auth_controller.dart';
 import '../leaderboard/leaderboard_sheet.dart';
 import 'home_zones.dart';

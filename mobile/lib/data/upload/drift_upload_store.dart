@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import '../api/models.dart';
+import '../models/models.dart';
 import '../db/app_database.dart';
 import 'upload_queue.dart';
 
