@@ -5,6 +5,8 @@
 set -euo pipefail
 MOBILE="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 PERM="ACCESS_BACKGROUND_LOCATION"
+# Match the full permission name, so a comment that merely mentions the word (ours does) is not a hit.
+FULL="android.permission.$PERM"
 FOUND=0
 
 mapfile -t MANIFESTS < <(find "$MOBILE/build/app/intermediates" -path '*merged_manifest*' -path '*ebug*' -name AndroidManifest.xml 2>/dev/null)
@@ -21,9 +23,9 @@ for m in "${MANIFESTS[@]}"; do
     echo "check_manifest: $m does not contain ACCESS_FINE_LOCATION, so it is not the merged app manifest" >&2
     exit 1
   fi
-  if grep -q "$PERM" "$m"; then
+  if grep -q "$FULL" "$m"; then
     echo "::error::$PERM found in merged manifest $m"
-    grep -n "$PERM" "$m" || true
+    grep -n "$FULL" "$m" || true
     FOUND=1
   fi
 done
