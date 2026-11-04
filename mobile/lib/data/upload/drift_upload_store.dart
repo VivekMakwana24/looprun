@@ -55,7 +55,7 @@ class DriftUploadStore implements UploadStore {
   }
 
   @override
-  Future<void> saveJob(UploadJob job) {
+  Future<void> saveJob(UploadJob job) async {
     final uid = _uidOrNull;
     if (uid == null) throw StateError('Not signed in');
     return db.writeUpload(

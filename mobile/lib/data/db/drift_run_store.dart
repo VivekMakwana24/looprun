@@ -40,10 +40,10 @@ class DriftRunStore implements RunStore {
   }
 
   @override
-  Future<void> createRun(String id, int startedAt) => db.createRun(_uid, id, startedAt);
+  Future<void> createRun(String id, int startedAt) async => db.createRun(_uid, id, startedAt);
 
   @override
-  Future<void> addFix(String runId, GeoFix fix) {
+  Future<void> addFix(String runId, GeoFix fix) async {
     return db.addFix(
       userId: _uid,
       runId: runId,
@@ -82,13 +82,13 @@ class DriftRunStore implements RunStore {
   }
 
   @override
-  Future<void> setRunState(String id, String state) => db.setRunState(_uid, id, state);
+  Future<void> setRunState(String id, String state) async => db.setRunState(_uid, id, state);
 
   @override
-  Future<void> markFinished(String id, int endedAt) => db.markFinished(_uid, id, endedAt);
+  Future<void> markFinished(String id, int endedAt) async => db.markFinished(_uid, id, endedAt);
 
   @override
-  Future<void> discardRun(String id) => db.discardRun(_uid, id);
+  Future<void> discardRun(String id) async => db.discardRun(_uid, id);
 
   @override
   Stream<RunSummary?> watchRun(String id) {
@@ -105,5 +105,5 @@ class DriftRunStore implements RunStore {
   }
 
   @override
-  Future<void> wipe() => db.wipe(_uid);
+  Future<void> wipe() async => db.wipe(_uid);
 }
