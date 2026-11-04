@@ -105,7 +105,7 @@ class CellRepository {
     if (sub != null) unawaited(sub.cancel());
   }
 
-  void _connect() {
+  void _connect({bool resync = false}) {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     final old = _liveSub;
@@ -138,6 +138,21 @@ class CellRepository {
       cancelOnError: true,
     );
     _liveSub = sub;
+    // Changes sent while the socket was down are lost; fetch the area again.
+    if (resync) unawaited(_resync(bbox));
+  }
+
+  Future<void> _resync(String bbox) async {
+    try {
+      final cells = await _api.getCells(bbox);
+      if (_disposed || _liveBbox != bbox) return;
+      _cells
+        ..clear()
+        ..addEntries(cells.map((c) => MapEntry(c.id, c)));
+      _publish();
+    } catch (_) {
+      // Offline again: the next reconnect tries once more.
+    }
   }
 
   void _scheduleReconnect() {
@@ -145,7 +160,7 @@ class CellRepository {
     _reconnectFailures++;
     final delay = reconnectPolicy.delayFor(_reconnectFailures);
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(delay, _connect);
+    _reconnectTimer = Timer(delay, () => _connect(resync: true));
   }
 
   void _apply(CellChange change) {

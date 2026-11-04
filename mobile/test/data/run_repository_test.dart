@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:looprun/data/repositories/run_repository.dart';
 import 'package:looprun/data/services/foreground_service.dart';
@@ -78,6 +80,100 @@ void main() {
     repo.acknowledge();
     expect(repo.current.status, RecorderStatus.idle);
     expect(repo.current.finishedRunId, isNull);
+  });
+
+  test('recorder and UI do not move until the database write has finished', () async {
+    await repo.start();
+    store.holdFixWrites = Completer<void>();
+    location.emit(fix(50.0, 8.7, t: 1));
+    location.emit(fix(50.001, 8.7, t: 2));
+    await settle();
+
+    // The disk has not answered yet: nothing may be counted or drawn.
+    expect(repo.current.path, isEmpty);
+    expect(repo.current.distanceM, 0);
+    expect(await store.fixesFor('run-1'), isEmpty);
+
+    store.holdFixWrites!.complete();
+    await settle();
+    expect(repo.current.path.length, 2);
+    expect(repo.current.distanceM, greaterThan(100));
+    expect((await store.fixesFor('run-1')).length, 2);
+    await repo.stop();
+  });
+
+  test('stop waits for writes that are still in flight, so the last points are kept', () async {
+    await repo.start();
+    store.holdFixWrites = Completer<void>();
+    location.emit(fix(50.0, 8.7, t: 1));
+    location.emit(fix(50.001, 8.7, t: 2));
+    await settle();
+
+    var stopped = false;
+    final stopping = repo.stop().then((_) => stopped = true);
+    await settle(40);
+    expect(stopped, isFalse, reason: 'stop must wait for the two pending writes');
+    expect(repo.current.status, RecorderStatus.stopping);
+
+    store.holdFixWrites!.complete();
+    await stopping;
+    expect(repo.current.status, RecorderStatus.finished);
+    expect(repo.current.error, isNull);
+    expect((await store.fixesFor('run-1')).length, 2);
+    expect((await store.runById('run-1'))!.state, 'finished');
+  });
+
+  test('stop does not hang on a write that never finishes', () async {
+    repo = RunRepository(
+      store: store,
+      location: location,
+      permissions: permissions,
+      foreground: foreground,
+      uploads: UploadQueue(store: store, api: api, nowMs: () => now),
+      api: api,
+      nowMs: () => now,
+      newId: () => 'run-${++ids}',
+      tickInterval: const Duration(milliseconds: 20),
+      pendingWriteTimeout: const Duration(milliseconds: 100),
+    );
+    await repo.start();
+    store.holdFixWrites = Completer<void>(); // never completed
+    location.emit(fix(50.0, 8.7, t: 1));
+    await settle();
+
+    await repo.stop().timeout(const Duration(seconds: 3));
+    expect(repo.current.status, isNot(RecorderStatus.stopping));
+    expect(repo.isRecording, isFalse);
+  });
+
+  test('a GPS stream that ends is reported while recording', () async {
+    final own = FakeLocationService();
+    repo = RunRepository(
+      store: store,
+      location: own,
+      permissions: permissions,
+      foreground: foreground,
+      uploads: UploadQueue(store: store, api: api, nowMs: () => now),
+      api: api,
+      nowMs: () => now,
+      newId: () => 'run-${++ids}',
+      tickInterval: const Duration(milliseconds: 20),
+    );
+    await repo.start();
+    await own.controller.close();
+    await settle();
+    expect(repo.current.error, contains('GPS stopped'));
+    expect(repo.current.status, RecorderStatus.recording);
+    await repo.stop();
+  });
+
+  test('a GPS stream error is shown and recording continues', () async {
+    await repo.start();
+    location.controller.addError(StateError('provider disabled'));
+    await settle();
+    expect(repo.current.error, contains('GPS error'));
+    expect(repo.current.status, RecorderStatus.recording);
+    await repo.stop();
   });
 
   test('a fix whose write fails does not count', () async {

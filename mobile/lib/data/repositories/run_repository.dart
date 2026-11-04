@@ -30,7 +30,9 @@ class RunRepository {
     int Function()? nowMs,
     String Function()? newId,
     Duration tickInterval = const Duration(seconds: 1),
-  })  : _store = store,
+    Duration pendingWriteTimeout = const Duration(seconds: 5),
+  })  : _pendingWriteTimeout = pendingWriteTimeout,
+        _store = store,
         _location = location,
         _permissions = permissions,
         _foreground = foreground,
@@ -49,6 +51,9 @@ class RunRepository {
   final ApiService _api;
   final int Function() _nowMs;
   final Duration _tickInterval;
+
+  /// How long stop() waits for fix writes that are still running before it carries on.
+  final Duration _pendingWriteTimeout;
 
   late final RunRecorder _recorder;
   final GpsHealthMonitor _health = GpsHealthMonitor();
@@ -117,7 +122,7 @@ class RunRepository {
       _actionSub = _foreground.actions.listen((action) {
         if (action == ForegroundAction.stop) unawaited(stop());
       });
-      _fixSub = _location.fixes().listen(_onFix, onError: _onFixError);
+      _fixSub = _location.fixes().listen(_onFix, onError: _onFixError, onDone: _onFixesEnded);
       _timer = Timer.periodic(_tickInterval, (_) => _tick());
       _emit(RecordingSnapshot(
         status: RecorderStatus.recording,
@@ -168,6 +173,14 @@ class RunRepository {
     ));
   }
 
+  /// The platform GPS stream ended on its own (it should run until we cancel it).
+  void _onFixesEnded() {
+    if (_recorder.status != RecorderStatus.recording && _recorder.status != RecorderStatus.paused) return;
+    _emit(_snap.copyWith(
+      error: 'GPS stopped sending updates. Stop the run and start again if no points appear.',
+    ));
+  }
+
   void _onFixError(Object error) {
     _emit(_snap.copyWith(error: 'GPS error: $error'));
   }
@@ -208,7 +221,11 @@ class RunRepository {
     _emit(_snap.copyWith(status: RecorderStatus.stopping, elapsedMs: _recorder.elapsedMs));
     await _teardown();
     // Wait for fixes whose write is still running, so the last point is not lost.
-    await Future.wait(List<Future<void>>.of(_pending));
+    // Bounded: a hung disk write must not leave the screen on "Saving..." forever.
+    await Future.wait(List<Future<void>>.of(_pending)).timeout(
+      _pendingWriteTimeout,
+      onTimeout: () => <void>[],
+    );
     final endedAt = _recorder.endedAt ?? _nowMs();
     final elapsed = _recorder.elapsedMs;
     _recorder.finish();
@@ -251,9 +268,14 @@ class RunRepository {
   }
 
   Future<void> _teardown() async {
-    await _fixSub?.cancel();
+    // Each step is guarded: a failing cancel must not stop the run from being saved.
+    try {
+      await _fixSub?.cancel();
+    } catch (_) {}
     _fixSub = null;
-    await _actionSub?.cancel();
+    try {
+      await _actionSub?.cancel();
+    } catch (_) {}
     _actionSub = null;
     _timer?.cancel();
     _timer = null;

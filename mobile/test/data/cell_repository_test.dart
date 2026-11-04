@@ -112,6 +112,33 @@ void main() {
     expect(repo.liveWanted, isTrue);
   });
 
+  test('after a reconnect the area is fetched again to catch up on missed changes', () async {
+    await repo.loadArea('1,2,3,4');
+    repo.startLive('1,2,3,4');
+    final loadsBefore = api.bboxes.length;
+
+    // While the socket was down cell "b" changed owner on the server.
+    api.cells = [
+      mine,
+      const Cell(id: 'b', lat: 50.001, lng: 8.7, owner: UserRef(id: 'u3', name: 'cy')),
+    ];
+    live.latest.addError(const LiveClosedException(1006));
+    await settle(80);
+
+    expect(live.sockets.length, 2);
+    expect(api.bboxes.length, loadsBefore + 1);
+    expect(api.bboxes.last, '1,2,3,4');
+    expect(repo.snapshot.firstWhere((c) => c.id == 'b').owner!.name, 'cy');
+  });
+
+  test('the first connection does not refetch the area', () async {
+    await repo.loadArea('1,2,3,4');
+    final before = api.bboxes.length;
+    repo.startLive('1,2,3,4');
+    await settle(40);
+    expect(api.bboxes.length, before);
+  });
+
   test('an auth failure (4401) is not retried', () async {
     repo.startLive('1,2,3,4');
     live.latest.addError(const LiveClosedException(4401));

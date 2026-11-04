@@ -74,6 +74,14 @@ class _Controls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (run.status == RecorderStatus.stopping) {
+      // The last GPS point is still being saved; a second run must not start yet.
+      return const FilledButton(
+        key: Key('saving_run_button'),
+        onPressed: null,
+        child: Text('Saving...'),
+      );
+    }
     if (!run.isActive) {
       return FilledButton.icon(
         key: const Key('start_run_button'),

@@ -90,8 +90,10 @@ void main() {
       await container.read(authRepositoryProvider).restore();
       final vm = container.read(mapViewModelProvider.notifier);
       await vm.onCameraIdle(south: 50.0, west: 8.0, north: 50.1, east: 8.1);
+      expect(live.latest.hasListener, isTrue, reason: 'the socket is open while the map shows cells');
       vm.onZoomedOut();
       await settle();
+      expect(live.latest.hasListener, isFalse, reason: 'zooming out must cancel the socket subscription');
       expect(sub.read().cells, isEmpty);
       expect(sub.read().notice, MapState.zoomInNotice);
     });

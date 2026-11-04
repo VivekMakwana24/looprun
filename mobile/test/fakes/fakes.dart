@@ -191,6 +191,9 @@ class MemoryStore implements RunStore, UploadStore {
   final Map<String, UploadJob> jobs = {};
   bool failFixWrites = false;
 
+  /// While set, addFix waits for it before storing (a slow disk). Complete it to let the writes land.
+  Completer<void>? holdFixWrites;
+
   Iterable<String> get runIds => _runs.keys;
 
   RunSummary _summary(_Run r) => RunSummary(
@@ -213,6 +216,8 @@ class MemoryStore implements RunStore, UploadStore {
   @override
   Future<void> addFix(String runId, GeoFix fix) async {
     if (failFixWrites) throw StateError('disk full');
+    final hold = holdFixWrites;
+    if (hold != null) await hold.future;
     _runs[runId]!.fixes.add(Fix(lat: fix.lat, lng: fix.lng, t: fix.t, acc: fix.acc, mock: fix.isMock));
   }
 
