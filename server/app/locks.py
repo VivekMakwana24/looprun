@@ -67,29 +67,37 @@ class LockSet:
         self._task: asyncio.Task | None = None
 
     async def acquire(self) -> None:
-        """Take every lock in order. The wait budget covers the whole set; on failure nothing stays held."""
+        """Take every lock in order. The wait budget covers the whole set; on failure nothing stays held.
+        The watchdog starts with the first lock, so a lock taken early cannot expire while we wait for a later
+        one; if any lock is lost meanwhile the whole set fails with LockLost and releases what it holds."""
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self.wait_s
         try:
             for lock in self.locks:
                 while not await lock.try_acquire():
+                    self.check()
                     if loop.time() >= deadline:
                         raise LockTimeout(f"could not acquire {lock.key} within {self.wait_s}s")
                     await asyncio.sleep(self.poll_s)
                 self._held.append(lock)
+                if self._task is None:
+                    self._task = asyncio.create_task(self._watchdog())
+                self.check()
+            self.check()
         except BaseException:
-            await self._release_all()
+            await self.release()
             raise
-        self._task = asyncio.create_task(self._watchdog())
 
     async def _watchdog(self) -> None:
         while True:
             await asyncio.sleep(self.ttl_s / 3)
-            for lock in self._held:
+            for lock in list(self._held):
                 try:
                     if not await lock.extend():
                         self.lost = True
                         log.error("lock lost", extra={"lock": lock.key})
+                        # the whole set is void: free the others at once (release() is idempotent)
+                        await self._release_all()
                         return
                 except Exception:  # noqa: BLE001 - keep trying; the TTL gives us a margin
                     log.warning("lock extension failed", exc_info=True)

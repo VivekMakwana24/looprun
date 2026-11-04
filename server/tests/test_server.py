@@ -207,7 +207,8 @@ def test_bbox_validation(client):
 
 
 # ------------------------------------------------------------------ leaderboard
-def test_leaderboard_ordering(client, clock):
+def test_leaderboard_ordering(make_app, clock):
+    client = make_app(privacy_min_users=1)
     hs = {n: login(client, n) for n in ("alice", "bob", "carol")}
     sizes = {"alice": (50.0, 500), "bob": (50.2, 300), "carol": (50.4, 400)}
     claimed = {n: run_loop(client, hs[n], lat=lat, side_m=side)["cells_claimed"] for n, (lat, side) in sizes.items()}

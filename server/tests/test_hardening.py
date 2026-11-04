@@ -273,7 +273,7 @@ def test_body_cap_content_length_and_small_chunked_bodies_still_work(make_app):
 
 # ------------------------------------------------------------------ B2: leaderboard honours the publish delay
 def test_leaderboard_does_not_reveal_unpublished_ownership(make_app, clock):
-    c = make_app(publish_delay_seconds=1800)
+    c = make_app(publish_delay_seconds=1800, privacy_min_users=1)
     a, b = login(c, "a"), login(c, "b")
     st = run_loop(c, a)
     board = lambda h: c.get("/v1/leaderboard/weekly", headers=hdr(h)).json()["entries"]  # noqa: E731
@@ -294,7 +294,7 @@ def test_leaderboard_cache_never_contains_unpublished_cells(make_app, clock):
 
 
 def test_takeover_is_delayed_on_the_leaderboard_too(make_app, clock):
-    c = make_app(publish_delay_seconds=1800)
+    c = make_app(publish_delay_seconds=1800, privacy_min_users=1)
     a, b, o = login(c, "a"), login(c, "b"), login(c, "o")
     first = run_loop(c, a, speed=3.0)
     clock.advance(seconds=1801)
@@ -369,7 +369,8 @@ def test_delete_resumes_after_a_crash_between_steps(client):
     original_db = res.db
     res.db = DB(original_db)
     try:
-        assert lenient(client).delete("/v1/me", headers=hdr(a)).status_code == 500
+        r = client.delete("/v1/me", headers=hdr(a))
+        assert r.status_code == 503 and r.headers["retry-after"]  # N8: infrastructure errors are 503, not 500
     finally:
         res.db = original_db
     assert db_run(client, lambda db: db.users.count_documents({"_id": a["_uid"], "deleting": True})) == 1

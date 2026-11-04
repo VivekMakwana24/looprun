@@ -7,17 +7,43 @@ The engine only pauses fading while freeze_until is in the future and never forg
   updated_at = now - grace, so a freeze can never bring decayed power back;
 * END (explicit, replaced by a new freeze, or lazily when it has expired and the user's power is next read):
   moves cell_power.updated_at forward by the time that power spent frozen;
+* every cell_power write here is a compare-and-set on (power, updated_at), so it can never overwrite a claim that a
+  worker applied meanwhile (settle_expired also runs inside claims, for rows in regions that claim did not lock);
 * QUOTA: at most `freeze_quota_days` frozen days in any rolling `freeze_window_days` (default 30 in 90).
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from . import engine_adapter as eng
+from .errors import LockLost
 
 DAY_MS = 86_400_000
 LOG_KEEP_MS = 400 * DAY_MS
+
+
+CAS_ATTEMPTS = 8
+
+
+async def _cas_update(db: Any, row: dict, change: Callable[[dict], dict | None]) -> bool:
+    """Compare-and-set a cell_power row: the write only lands when (power, updated_at) are still what `change`
+    was computed from. A claim that wrote the row in between wins; we re-read and recompute (or stop when the
+    change no longer applies). True if this call changed the row."""
+    for _ in range(CAS_ATTEMPTS):
+        fields = change(row)
+        if fields is None:
+            return False
+        r = await db.cell_power.update_one(
+            {"_id": row["_id"], "power": row["power"], "updated_at": row["updated_at"]}, {"$set": fields}
+        )
+        if r.matched_count:
+            return True
+        row = await db.cell_power.find_one({"_id": row["_id"]})
+        if row is None:  # deleted meanwhile (account deletion)
+            return False
+    raise LockLost(f"cell_power row {row['_id']} kept changing")  # RETRYABLE: the caller is retried
 
 
 async def settle_freeze(db: Any, user: dict, end_ms: int) -> int:
@@ -29,9 +55,13 @@ async def settle_freeze(db: Any, user: dict, end_ms: int) -> int:
     if started is not None and end_ms > started:
         log_entry = {"start": started, "end": end_ms}
         async for d in db.cell_power.find({"user_id": user["_id"]}):
-            if d["updated_at"] < end_ms:
-                new = d["updated_at"] + end_ms - max(d["updated_at"], started)
-                await db.cell_power.update_one({"_id": d["_id"]}, {"$set": {"updated_at": new}})
+
+            def shift(row: dict) -> dict | None:
+                if row["updated_at"] >= end_ms:
+                    return None  # a claim refreshed it after the freeze: nothing to forgive
+                return {"updated_at": row["updated_at"] + end_ms - max(row["updated_at"], started)}
+
+            if await _cas_update(db, d, shift):
                 shifted += 1
     log = [e for e in user.get("freeze_log", []) if e["end"] > end_ms - LOG_KEEP_MS]
     if log_entry:
@@ -78,9 +108,14 @@ async def rebase_for_freeze(db: Any, user_id: str, now: int) -> int:
     """power := faded(now), updated_at := now - grace for rows that are already past their grace period."""
     grace_ms = int(eng.grace_days() * DAY_MS)
     n = 0
+
+    def rebase(row: dict) -> dict | None:
+        if now - row["updated_at"] <= grace_ms:
+            return None  # a claim refreshed the row meanwhile: it keeps its new credit
+        p = eng.faded_power(user_id, row["power"], row["updated_at"], now, None)
+        return {"power": p, "updated_at": now - grace_ms}
+
     async for d in db.cell_power.find({"user_id": user_id}):
-        if now - d["updated_at"] > grace_ms:
-            p = eng.faded_power(user_id, d["power"], d["updated_at"], now, None)
-            await db.cell_power.update_one({"_id": d["_id"]}, {"$set": {"power": p, "updated_at": now - grace_ms}})
+        if await _cas_update(db, d, rebase):
             n += 1
     return n

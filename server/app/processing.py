@@ -8,6 +8,7 @@ add credit twice.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -88,12 +89,31 @@ async def _process(res: Resources, run: dict) -> None:
     changes: list[dict] = []
     credit = eng.effort_credit(processed.moving_seconds, len(processed.cells)) if processed.cells else 0.0
     if processed.cells and credit > 0:  # zero credit would only refresh the grace period for free
+        # the run is finished (and its plan deleted) inside the lock, so a second worker holding the same run
+        # can never plan it again after the first one is done
         claim = await _claim_cells(res, run, processed, credit)
-        if claim is not None:
-            claimed, taken, changes = claim["claimed"], claim["taken"], claim["changes"]
-            if claim["skipped"]:
-                return
+        if claim["skipped"]:
+            return
+        claimed, taken, changes = claim["claimed"], claim["taken"], claim["changes"]
+    else:
+        await _finish(res, run_id, processed, 0, 0)
+    await publish_changes(res.redis, changes)
+    log.info(
+        "run_processed",
+        extra={
+            "run_id": run_id,
+            "status": processed.status,
+            "cells": len(processed.cells),
+            "claimed": claimed,
+            "taken": taken,
+            "flags": [f["code"] for f in processed.flags],
+        },
+    )
 
+
+async def _finish(res: Resources, run_id: str, processed: eng.ProcessedRun, claimed: int, taken: int) -> None:
+    """Write the result into the run, drop or age the raw GPS, and delete the claim plan (it names other users)."""
+    db = res.db
     status = processed.status
     update: dict[str, Any] = {
         "status": status,
@@ -114,30 +134,23 @@ async def _process(res: Resources, run: dict) -> None:
         await db.run_fixes.update_one(
             {"_id": run_id}, {"$set": {"expire_at": expiry(res, res.settings.fixes_retention_days)}}
         )
-    await publish_changes(res.redis, changes)
-    log.info(
-        "run_processed",
-        extra={
-            "run_id": run_id,
-            "status": status,
-            "cells": len(processed.cells),
-            "claimed": claimed,
-            "taken": taken,
-            "flags": [f["code"] for f in processed.flags],
-        },
-    )
+    await db.run_claims.delete_one({"_id": run_id})
 
 
-async def _claim_cells(res: Resources, run: dict, processed: eng.ProcessedRun, credit: float) -> dict | None:
+async def _claim_cells(res: Resources, run: dict, processed: eng.ProcessedRun, credit: float) -> dict:
     s = res.settings
     # Lock order: the user's lock first (serialises with that user's account deletion), then one lock per H3
     # resolution-5 region of the claimed cells, sorted. Runs in different regions do not wait for each other.
     regions = sorted({eng.region_of(c, REGION_RES) for c in processed.cells})
     keys = [user_key(run["user_id"]), *(region_key(r) for r in regions)]
+    skipped = {"skipped": True, "claimed": 0, "taken": 0, "changes": []}
     async with LockSet(res.redis, keys, ttl_s=s.processing_lock_seconds, wait_s=s.processing_lock_wait_seconds) as lock:
         user = await res.db.users.find_one({"_id": run["user_id"]})
         if user is None or user.get("deleting"):  # re-checked inside the lock: DELETE /me may have started
-            return {"skipped": True, "claimed": 0, "taken": 0, "changes": []}
+            return skipped
+        current = await res.db.runs.find_one({"_id": run["_id"]}, {"status": 1})
+        if current is None or current.get("status") != "processing":
+            return skipped  # another worker finished this run while we waited for the lock
         plan = await res.db.run_claims.find_one({"_id": run["_id"]})
         if plan is None:
             plan = await _plan(res, run, processed, credit)
@@ -145,13 +158,21 @@ async def _claim_cells(res: Resources, run: dict, processed: eng.ProcessedRun, c
             for o in plan["outcomes"]:
                 lock.check()
                 await _apply(res.db, plan["user_id"], o)
-            await res.db.run_claims.update_one({"_id": run["_id"]}, {"$set": {"applied": True}})
-        changes = [
-            {"cell": o["cell"], "new_owner": o["owner"], "reveal_at": o["reveal_at"]}
-            for o in plan["outcomes"]
-            if o["changed"]
-        ]
-        return {"skipped": False, "claimed": plan["claimed"], "taken": plan["taken"], "changes": changes}
+            # keep only what a redelivery needs (counts and the changes to publish), not the per-cell outcomes
+            await res.db.run_claims.update_one(
+                {"_id": run["_id"]},
+                {
+                    "$set": {"applied": True, "refs": _refs(plan["changes"], plan["user_id"])},
+                    "$unset": {"outcomes": ""},
+                },
+            )
+        lock.check()
+        await _finish(res, run["_id"], processed, plan["claimed"], plan["taken"])
+        return {"skipped": False, "claimed": plan["claimed"], "taken": plan["taken"], "changes": plan["changes"]}
+
+
+def _refs(changes: list[dict], run_user: str) -> list[str]:
+    return sorted({c["new_owner"] for c in changes if c["new_owner"]} - {run_user})
 
 
 async def _plan(res: Resources, run: dict, processed: eng.ProcessedRun, credit: float) -> dict:
@@ -196,6 +217,14 @@ async def _plan(res: Resources, run: dict, processed: eng.ProcessedRun, credit: 
                 "fields": change_fields(doc, out.new_owner, now, delay_ms) if changed else None,
             }
         )
+    changes = [
+        {"cell": o["cell"], "new_owner": o["owner"], "reveal_at": o["reveal_at"]} for o in outcomes if o["changed"]
+    ]
+    # `refs`: every other user this plan names (indexed), so account deletion can find and scrub the plans
+    refs = {o["owner"] for o in outcomes if o["owner"]}
+    for o in outcomes:
+        if o["fields"]:
+            refs |= {o["fields"][k] for k in ("owner_id", "public_owner_id", "pending_owner_id") if o["fields"][k]}
     plan = {
         "_id": run["_id"],
         "user_id": user_id,
@@ -203,7 +232,10 @@ async def _plan(res: Resources, run: dict, processed: eng.ProcessedRun, credit: 
         "claimed": claimed,
         "taken": taken,
         "outcomes": outcomes,
+        "changes": changes,
+        "refs": sorted(refs - {user_id}),
         "created_at": now,
+        "expire_at": expiry(res, s.fixes_retention_days),  # backstop: a plan normally dies with its run
     }
     try:
         await db.run_claims.insert_one(plan)
@@ -288,12 +320,67 @@ async def delete_account(res: Resources, user_id: str) -> None:
                     raise
     await db.run_fixes.delete_many({"user_id": user_id})
     await db.run_claims.delete_many({"user_id": user_id})
+    await scrub_claim_plans(db, user_id)  # plans of OTHER users' in-flight runs may still name this user
     await db.runs.delete_many({"user_id": user_id})
     await db.reports.delete_many({"reporter_id": user_id})
     await db.users.delete_one({"_id": user_id})
+    await purge_redis(res.redis, user_id)
     await publish_changes(res.redis, changes)
     await publish_user_deleted(res.redis, user_id)
     log.info("account_deleted", extra={"cells_reassigned": len(changes)})
+
+
+async def scrub_claim_plans(db: Any, user_id: str) -> None:
+    """Remove a deleted user's id from the claim plans of other users' runs that are still in flight (the plans of
+    finished runs no longer exist). The numbers stay, so an interrupted run can still be completed exactly once."""
+
+    def clear(v: Any) -> Any:
+        return None if v == user_id else v
+
+    async for plan in db.run_claims.find({"refs": user_id}):
+        for o in plan.get("outcomes", []):
+            o["owner"] = clear(o["owner"])
+            for k in ("owner_id", "public_owner_id", "pending_owner_id"):
+                if o.get("fields"):
+                    o["fields"][k] = clear(o["fields"][k])
+        for c in plan.get("changes", []):
+            c["new_owner"] = clear(c["new_owner"])
+        plan["refs"] = [r for r in plan["refs"] if r != user_id]
+        await db.run_claims.replace_one({"_id": plan["_id"], "applied": plan["applied"]}, plan)
+
+
+async def purge_redis(redis: Any, user_id: str) -> None:
+    """Redis holds the id too: rate-limit counters, socket registry, and cached leaderboard counts (keyed by user)."""
+    keys = [k async for k in redis.scan_iter(match=f"looprun:*{user_id}*", count=500)]
+    keys += [k async for k in redis.scan_iter(match="looprun:leaderboard:*", count=500)]
+    for k in keys:
+        if ":lock:" not in k:  # locks are released by their holders; deleting one would break them
+            await redis.delete(k)
+
+
+async def sweep_stuck_runs(res: Resources, enqueue: Callable[[str], None], older_than_s: float | None = None) -> int:
+    """Re-enqueue runs that sit in `processing` longer than `older_than_s` (default stuck_run_seconds): the process
+    died between the insert and the enqueue, or the queue lost the message. Processing is idempotent per run id,
+    so a spurious re-enqueue is harmless. Returns how many runs were re-enqueued."""
+    db, s = res.db, res.settings
+    now = res.clock()
+    cutoff = now - int((s.stuck_run_seconds if older_than_s is None else older_than_s) * 1000)
+    q = {
+        "status": "processing",
+        "received_at": {"$lt": cutoff},
+        "$or": [{"last_enqueued_at": {"$exists": False}}, {"last_enqueued_at": {"$lt": cutoff}}],
+    }
+    n = 0
+    for run in [r async for r in db.runs.find(q).limit(500)]:
+        try:
+            await asyncio.to_thread(enqueue, run["_id"])
+            await db.runs.update_one({"_id": run["_id"]}, {"$set": {"last_enqueued_at": now}})
+            n += 1
+        except Exception:  # noqa: BLE001 - one bad message must not stop the sweep; the next sweep tries again
+            log.exception("sweep_enqueue_failed", extra={"run_id": run["_id"]})
+    if n:
+        log.warning("stuck_runs_requeued", extra={"count": n})
+    return n
 
 
 async def _reassign_cells(res: Resources, user_id: str, check: Callable[[], None]) -> list[dict]:

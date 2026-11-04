@@ -77,7 +77,8 @@ async def build_views(res: Resources, docs: list[dict], viewer_id: str | None) -
     for d, owner in chosen:
         cid = d["_id"]
         user = users.get(owner)
-        if user is None:  # owner vanished (should not happen); never show a ghost
+        if user is None or user.get("deleting"):
+            # a vanished or deleting owner is never shown: the cell counts as unowned until it is reassigned
             continue
         if owner == viewer_id:
             out.append(_cell(d, {"id": owner, "name": user["name"]}, True, False))

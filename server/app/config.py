@@ -38,6 +38,11 @@ class Settings(BaseSettings):
         30, validation_alias=AliasChoices("LOOPRUN_RUN_RATE_LIMIT")
     )  # uploads per user per window
     run_rate_window_seconds: int = 3600
+    # a repeated upload of a run that is still `processing` after this long re-enqueues it (lost message / crash)
+    run_reenqueue_after_seconds: float = Field(30.0, ge=0)
+    # the sweeper (celery beat, every sweep_interval_seconds) re-enqueues runs `processing` for longer than this
+    stuck_run_seconds: float = Field(300.0, ge=0)
+    sweep_interval_seconds: float = Field(60.0, gt=0)
 
     # --- map / privacy ---
     # Delayed publishing: a change of cell owner becomes visible to other people (GET /cells and the
@@ -49,6 +54,8 @@ class Settings(BaseSettings):
     # in cells within grid_disk(cell, privacy_radius_k_ring). Otherwise owner=null, hidden=true.
     privacy_min_users: int = Field(3, ge=1, validation_alias=AliasChoices("LOOPRUN_PRIVACY_K", "PRIVACY_MIN_USERS"))
     privacy_ring: int = Field(3, ge=0)  # the "k=3" of grid_disk(k=3)
+    cells_rate_limit: int = Field(120, ge=1, validation_alias=AliasChoices("LOOPRUN_CELLS_RATE_LIMIT"))  # per user
+    cells_rate_window_seconds: int = Field(60, ge=1)
     bbox_max_degrees: float = 0.2
     cells_max_results: int = 20000
     leaderboard_cache_seconds: int = 60
@@ -72,6 +79,7 @@ class Settings(BaseSettings):
 
     # --- websocket ---
     ws_recheck_seconds: float = Field(30.0, gt=0)  # re-check that the user still exists
+    ws_max_sockets_per_user: int = Field(5, ge=1)
     ws_auth_timeout_seconds: float = Field(10.0, gt=0)  # first-message auth must arrive within this
 
 

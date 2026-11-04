@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -68,6 +69,30 @@ async def live(ws: WebSocket) -> None:
     await _subscribe_and_run(ws, res, user, (min_lng, min_lat, max_lng, max_lat), accept_first=False)
 
 
+def _sockets_key(user_id: str) -> str:
+    return f"looprun:ws:{user_id}"
+
+
+async def _register_socket(res: Resources, user_id: str, sid: str) -> bool:
+    """Per-user cap on concurrent sockets, shared by every API process through Redis. Each socket is a sorted-set
+    member scored with its last heartbeat; members that stopped beating (a crashed process) expire."""
+    now = res.clock()
+    key = _sockets_key(user_id)
+    stale = now - int(res.settings.ws_recheck_seconds * 3000)
+    await res.redis.zremrangebyscore(key, 0, stale)
+    if await res.redis.zcard(key) >= res.settings.ws_max_sockets_per_user:
+        return False
+    await res.redis.zadd(key, {sid: now})
+    await res.redis.expire(key, int(res.settings.ws_recheck_seconds * 4) + 1)
+    return True
+
+
+async def _heartbeat_socket(res: Resources, user_id: str, sid: str) -> None:
+    key = _sockets_key(user_id)
+    await res.redis.zadd(key, {sid: res.clock()}, xx=True)
+    await res.redis.expire(key, int(res.settings.ws_recheck_seconds * 4) + 1)
+
+
 async def _close(ws: WebSocket, code: int) -> None:
     with contextlib.suppress(Exception):
         await ws.close(code=code)
@@ -76,6 +101,20 @@ async def _close(ws: WebSocket, code: int) -> None:
 async def _subscribe_and_run(ws: WebSocket, res: Resources, user: dict, bbox: tuple, accept_first: bool) -> None:
     min_lng, min_lat, max_lng, max_lat = bbox
     user_id = user["_id"]
+    sid = uuid.uuid4().hex
+    if not await _register_socket(res, user_id, sid):
+        # before accept the client sees HTTP 403 on the handshake, after accept a close with code 4429
+        await _close(ws, 4429)
+        return
+    try:
+        await _serve(ws, res, user_id, (min_lng, min_lat, max_lng, max_lat), accept_first, sid)
+    finally:
+        with contextlib.suppress(Exception):
+            await res.redis.zrem(_sockets_key(user_id), sid)
+
+
+async def _serve(ws: WebSocket, res: Resources, user_id: str, bbox: tuple, accept_first: bool, sid: str) -> None:
+    min_lng, min_lat, max_lng, max_lat = bbox
     pubsub = res.redis.pubsub()
     await pubsub.subscribe(CHANNEL)  # subscribe before accept/ready: nothing published afterwards is missed
     if accept_first:
@@ -116,6 +155,7 @@ async def _subscribe_and_run(ws: WebSocket, res: Resources, user: dict, bbox: tu
             msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
             if loop.time() >= next_check:  # the account may have been deleted (or the token invalidated)
                 next_check = loop.time() + res.settings.ws_recheck_seconds
+                await _heartbeat_socket(res, user_id, sid)
                 if await res.db.users.find_one({"_id": user_id, "deleting": {"$ne": True}}) is None:
                     return
             if msg is None:

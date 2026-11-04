@@ -67,6 +67,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/RunStatus"}
         "401": {description: Missing, invalid or expired token}
+        "403": {description: The account is being deleted; every route except DELETE /me refuses it}
         "404": {description: Unknown run or not yours}
         "422": {description: The id is not a UUID}
   /cells:
@@ -89,15 +90,20 @@ paths:
                     type: array
                     items: {$ref: "#/components/schemas/Cell"}
         "401": {description: Missing, invalid or expired token}
+        "403": {description: The account is being deleted; every route except DELETE /me refuses it}
         "422": {description: Malformed bbox, or larger than 0.2 degrees on a side}
+        "429": {description: "Rate limited: 120 requests per minute per user by default (LOOPRUN_CELLS_RATE_LIMIT); see Retry-After"}
   /leaderboard/weekly:
     get:
       summary: Cells held, ranked, for the current ISO week
       description: >
-        Counts only ownership that is already published (same delay as GET /cells shows other people);
-        the caller additionally sees their own entry at once.
+        Counts only what GET /cells shows other people with a name: ownership that is already published (same
+        delay), whose owner is not in a home zone and not hidden by the K-anonymity rule, and whose account is
+        not being deleted. Users whose cells are all hidden are not listed. The caller additionally sees their own
+        entry at once.
       responses:
         "401": {description: Missing, invalid or expired token}
+        "403": {description: The account is being deleted; every route except DELETE /me refuses it}
         "200":
           content:
             application/json:
@@ -136,6 +142,7 @@ paths:
       responses:
         "204": {description: Saved}
         "401": {description: Missing, invalid or expired token}
+        "403": {description: The account is being deleted; every route except DELETE /me refuses it}
         "422": {description: More than 5 zones, radius outside 50..1000 m, or coordinates out of range}
   /me/freeze:
     post:
@@ -161,6 +168,7 @@ paths:
                 properties:
                   freeze_until: {type: integer, nullable: true}
         "401": {description: Missing, invalid or expired token}
+        "403": {description: The account is being deleted; every route except DELETE /me refuses it}
         "409": {description: The 30-days-in-90 quota would be exceeded; nothing was changed}
         "422": {description: days outside 0..30}
   /me:
@@ -169,7 +177,9 @@ paths:
       description: >
         Resumable. The account is first marked "deleting" (new uploads get 403), cells it held pass to the
         strongest remaining player or become free, then everything is deleted and the user last. If the server is
-        busy it answers 503 and the call can simply be repeated with the same token.
+        busy (or a lock, MongoDB or Redis fails half way) it answers 503 with Retry-After and the call can simply be
+        repeated with the same token. While the account is "deleting" it is already hidden from the map, the
+        leaderboard and live frames.
       responses:
         "204": {description: Deleted}
         "401": {description: Missing, invalid or expired token, or the account is already deleted}
@@ -191,6 +201,7 @@ paths:
       responses:
         "202": {description: Recorded}
         "401": {description: Missing, invalid or expired token}
+        "403": {description: The account is being deleted; every route except DELETE /me refuses it}
         "422": {description: Validation error}
         "429": {description: Rate limited (20 per hour)}
   /live:
@@ -200,8 +211,12 @@ paths:
         Connect to /v1/live?bbox=minLng,minLat,maxLng,maxLat and, as the FIRST message, send
         {"type":"auth","token":"<access_token>"} within 10 seconds. Clients should prefer this form: a token in the
         URL (the older `&token=<access_token>` query parameter, still accepted) ends up in proxy and access logs.
-        A missing, invalid or expired token, or a user that no longer exists, closes the socket with code 4401; a bad
-        bbox closes it with 1008. Sockets of a user that is deleted are closed with 4401.
+        Failures in the HTTP handshake (before the upgrade) are plain HTTP 403: a bad or too large bbox, an invalid,
+        expired or unknown `token` query parameter, a user that is being deleted, or more than 5 concurrent sockets
+        for the user. After the upgrade, a first message that is missing, not JSON, not an auth message, has an
+        invalid or expired token, or names a user that no longer exists closes the socket with code 4401 (no
+        first message within 10 s: also 4401); a sixth concurrent socket is closed with code 4429. At most 5 sockets
+        per user may be open at once. Sockets of a user that is deleted are closed with 4401.
         Server sends JSON text frames {"type":"cell_changed","cell":"<h3>","lat":number,"lng":number,"owner":UserRef|null,"mine":bool}
         (lat,lng = cell centre). Other people's changes arrive after the publish delay. Hidden cells are never sent
         with an owner.

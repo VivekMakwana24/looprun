@@ -71,6 +71,9 @@ async def ensure_indexes(db: Any) -> None:
     # Raw GPS: documents with an `expire_at` date are deleted by Mongo's TTL monitor at that time.
     await db.run_fixes.create_index("expire_at", expireAfterSeconds=0)
     await db.run_claims.create_index("user_id")
+    await db.run_claims.create_index("refs")
+    await db.run_claims.create_index("expire_at", expireAfterSeconds=0)
+    await db.runs.create_index([("status", 1), ("received_at", 1)])
     await db.cell_power.create_index([("cell", 1), ("user_id", 1)], unique=True)
     await db.cell_power.create_index("user_id")
     await db.cells.create_index([("lat", 1), ("lng", 1)])

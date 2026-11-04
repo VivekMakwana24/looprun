@@ -39,6 +39,10 @@ def configure_celery(settings: Settings) -> None:
         task_serializer="json",
         accept_content=["json"],
         broker_connection_retry_on_startup=True,
+        # run `celery -A app.worker:celery_app beat` (or worker -B) for the sweeper; see server/NOTES.md
+        beat_schedule={
+            "sweep-stuck-runs": {"task": "looprun.sweep_stuck_runs", "schedule": settings.sweep_interval_seconds}
+        },
     )
 
 
@@ -88,3 +92,20 @@ def process_run(self: Any, run_id: str) -> None:
 def enqueue_run(run_id: str) -> None:
     """Put a run on the queue. Only the id travels through Redis; the fixes stay in Mongo."""
     process_run.delay(run_id)
+
+
+async def _sweep() -> int:
+    from .processing import sweep_stuck_runs  # noqa: PLC0415
+
+    res = make_resources(_current_settings())
+    try:
+        return await sweep_stuck_runs(res, enqueue_run)
+    finally:
+        await res.close()
+
+
+@celery_app.task(name="looprun.sweep_stuck_runs")
+def sweep_stuck_runs_task() -> int:
+    """Periodic (celery beat): re-enqueue runs stuck in `processing` for more than settings.stuck_run_seconds."""
+    setup_logging(_current_settings().log_level)
+    return run_sync(_sweep())
