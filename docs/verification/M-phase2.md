@@ -8,7 +8,10 @@ Nothing was compiled locally (no Flutter/Dart SDK in this workspace). Every clai
 
 ## CI state
 
-CI_STATE_PLACEHOLDER
+All four jobs green on commit dce470c (run 41870971355): Python, Integration, Docker, and Flutter (pub get, build_runner, analyze, test, debug APK, and the new F11 manifest step).
+`flutter analyze --no-fatal-infos` reports 24 infos and no warnings or errors (mostly `prefer_initializing_formals` on constructors that keep private fields; left alone on purpose).
+The first run of the F11 step (on the previous commit) failed for a good reason that was a false positive: the merged manifest keeps our XML comment "Deliberately NOT requested: ACCESS_BACKGROUND_LOCATION". The script now matches the full name `android.permission.ACCESS_BACKGROUND_LOCATION`, and the independent `aapt2 dump permissions` check of the APK had already passed. The step has been seen failing (on that false positive) and passing; it has not been seen catching a real hit in CI, only in a local test with a fabricated manifest.
+Earlier in the phase: a first push failed `analyze` on two `top_level_cycle` errors (providers referring to each other), fixed with explicit provider types.
 
 ## What changed
 
