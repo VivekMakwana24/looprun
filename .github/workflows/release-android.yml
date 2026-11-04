@@ -5,8 +5,11 @@ name: Release Android (signed AAB)
 #
 # Needs (Settings > Secrets and variables > Actions):
 #   secrets:   ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD, ANDROID_KEY_ALIAS
-#   variables: API_BASE_URL (https://...), GOOGLE_SERVER_CLIENT_ID, MAP_STYLE_URL (production map style)
-# The job fails, with a message, if any of them is empty. There are deliberately no defaults.
+#   variables: API_BASE_URL (https://...), GOOGLE_SERVER_CLIENT_ID, MAP_STYLE_URL (production map style),
+#              MAP_TILE_PROVIDER (name shown in the location disclosure), PRIVACY_POLICY_URL (https://...)
+# The job fails, with a message, if any of them is empty or still looks like a [PLACEHOLDER] / CHANGE_ME.
+# There are deliberately no defaults. Third-party actions are pinned by commit SHA (tag in the comment);
+# the signing secrets are only visible to the two steps that need them, never to third-party actions.
 on:
   workflow_dispatch:
 
@@ -16,27 +19,44 @@ permissions:
 jobs:
   build-aab:
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-android
+      cancel-in-progress: false
     env:
-      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       API_BASE_URL: ${{ vars.API_BASE_URL }}
       GOOGLE_SERVER_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
       MAP_STYLE_URL: ${{ vars.MAP_STYLE_URL }}
+      MAP_TILE_PROVIDER: ${{ vars.MAP_TILE_PROVIDER }}
+      PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Check signing secrets and build settings
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           missing=0
           for v in ANDROID_KEYSTORE_B64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD ANDROID_KEY_ALIAS; do
             if [ -z "${!v}" ]; then echo "::error::Secret $v is not set"; missing=1; fi
           done
-          for v in API_BASE_URL GOOGLE_SERVER_CLIENT_ID MAP_STYLE_URL; do
+          for v in API_BASE_URL GOOGLE_SERVER_CLIENT_ID MAP_STYLE_URL MAP_TILE_PROVIDER PRIVACY_POLICY_URL; do
             if [ -z "${!v}" ]; then echo "::error::Repository variable $v is not set (Settings > Secrets and variables > Actions > Variables). Release builds have no default for it."; missing=1; fi
           done
           if [ "$missing" -ne 0 ]; then exit 1; fi
+          # Reject anything that still looks like a template placeholder.
+          for v in API_BASE_URL GOOGLE_SERVER_CLIENT_ID MAP_STYLE_URL MAP_TILE_PROVIDER PRIVACY_POLICY_URL; do
+            case "${!v}" in
+              '['*|*PLACEHOLDER*|*placeholder*|*CHANGE_ME*) echo "::error::Repository variable $v still looks like a placeholder"; missing=1 ;;
+            esac
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+          case "$PRIVACY_POLICY_URL" in
+            https://*) ;;
+            *) echo "::error::PRIVACY_POLICY_URL must start with https://"; exit 1 ;;
+          esac
           case "$API_BASE_URL" in
             https://*) ;;
             *) echo "::error::API_BASE_URL must start with https:// (got: $API_BASE_URL)"; exit 1 ;;
@@ -49,12 +69,13 @@ jobs:
             *demotiles.maplibre.org*) echo "::error::MAP_STYLE_URL points at the MapLibre demo server, which is not for production use"; exit 1 ;;
           esac
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
           java-version: "21"
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
+          flutter-version: "3.47.9"
           channel: stable
           cache: true
 
@@ -74,6 +95,11 @@ jobs:
           fi
 
       - name: Install keystore and key.properties
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           umask 077
           printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > mobile/android/app/upload-keystore.jks
@@ -97,7 +123,22 @@ jobs:
           flutter build appbundle --release \
             --dart-define=API_BASE_URL="$API_BASE_URL" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
-            --dart-define=MAP_STYLE_URL="$MAP_STYLE_URL"
+            --dart-define=MAP_STYLE_URL="$MAP_STYLE_URL" \
+            --dart-define=MAP_TILE_PROVIDER="$MAP_TILE_PROVIDER" \
+            --dart-define=PRIVACY_POLICY_URL="$PRIVACY_POLICY_URL"
+
+      # Google Play: new apps and updates must target API 36+ (since 2026-08-31, extension ended 2026-11-01;
+      # developer.android.com/google/play/requirements/target-sdk). Read it from the merged release manifest.
+      - name: Verify targetSdkVersion is at least 36
+        working-directory: mobile
+        run: |
+          manifest="$(find build/app/intermediates -path '*merged_manifests/release*' -name AndroidManifest.xml | head -n 1)"
+          if [ -z "$manifest" ]; then echo '::error::merged release AndroidManifest.xml not found; cannot verify targetSdkVersion'; exit 1; fi
+          target="$(grep -o 'android:targetSdkVersion="[0-9]*"' "$manifest" | head -n 1 | grep -o '[0-9]*')"
+          echo "targetSdkVersion=$target ($manifest)"
+          if [ -z "$target" ] || [ "$target" -lt 36 ]; then
+            echo "::error::targetSdkVersion is '${target:-unknown}', Google Play requires 36 or higher"; exit 1
+          fi
 
       - name: Verify the AAB is signed with the upload key, not the debug key
         run: |
@@ -114,7 +155,7 @@ jobs:
           fi
           echo "$out" | grep -q 'jar verified' || { echo '::error::jarsigner did not report "jar verified"'; exit 1; }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: looprun-release-aab
           path: mobile/build/app/outputs/bundle/release/app-release.aab

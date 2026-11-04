@@ -137,6 +137,10 @@ Repository **variables** (not secrets; Settings > Secrets and variables > Action
 | `API_BASE_URL` | release-android | `https://<domain>` (no trailing path; must start with `https://`) |
 | `GOOGLE_SERVER_CLIENT_ID` | release-android | The Google OAuth **web** client id (same value as `LOOPRUN_GOOGLE_CLIENT_ID` on the server) |
 | `MAP_STYLE_URL` | release-android | Production MapLibre style URL from your tile provider. The MapLibre demo server (`demotiles.maplibre.org`) is rejected by the job. |
+| `MAP_TILE_PROVIDER` | release-android | Name (and host) of the tile provider, shown in the location disclosure; must match the compliance docs. |
+| `PRIVACY_POLICY_URL` | release-android | Public `https://` URL of the hosted privacy policy, shown in the app. |
+
+The job also rejects any variable that is empty, starts with `[`, or contains `PLACEHOLDER` / `CHANGE_ME`.
 
 `GITHUB_TOKEN` is provided automatically; the deploy gate uses it with `actions: read`.
 
@@ -153,6 +157,8 @@ base64 -w0 upload-keystore.jks > upload-keystore.b64      # macOS: base64 -i upl
 Paste the contents of `upload-keystore.b64` into secret `ANDROID_KEYSTORE_B64`, and set the passwords and alias secrets. Store the `.jks` file and passwords in a password manager plus one offline backup, then delete `upload-keystore.b64`. Enrol in **Play App Signing** when creating the app in Play Console: Google holds the real app-signing key and your keystore is only the upload key, which Google can reset if you lose it.
 
 How the workflow signs: `mobile/tool/patch_signing.sh` edits the generated `android/app/build.gradle.kts` (written against the Flutter stable app template as of 2026-11-03) to add a `release` signing config that reads `android/key.properties`, and to point the `release` build type at it. The workflow then writes `android/app/upload-keystore.jks` and `android/key.properties` on the runner only. The job **fails** if the patch anchors are not found in the generated file (a Flutter template change), if the debug signing config is still referenced, or if the finished AAB is not verified by `jarsigner -verify` or carries an "Android Debug" certificate. The script has been tested only against the template text, not by an actual Gradle build; the first real run of the workflow is the real test. Check by hand with `jarsigner -verify -verbose -certs app-release.aab`.
+
+Release job hygiene: third-party actions are pinned by commit SHA (the tag is in a comment; update both together), Flutter is pinned to `3.47.9` in `ci.yml` and `release-android.yml` (change both together and re-run CI), the signing secrets are exposed only to the two steps that use them, and a step fails the job if the merged release manifest has `targetSdkVersion` below 36 (Google Play requires API 36 for new apps and updates, see developer.android.com/google/play/requirements/target-sdk). That step reads `build/app/intermediates/merged_manifests/release` and has not yet run on a real runner; if the path changes, the step fails closed.
 
 Other release steps: bump `version:` in `mobile/pubspec.yaml` (build number must increase on every upload), run the workflow, upload the AAB to the closed test track (see `docs/compliance/closed-test-checklist.md`).
 
