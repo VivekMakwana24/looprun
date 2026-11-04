@@ -11,28 +11,28 @@ Google Play requires an in-app disclosure that is shown in normal use (not only 
 
 ## In-app screen text (must match code)
 
-The mobile lane must make `mobile/lib/features/disclosure/disclosure_screen.dart` show exactly this. Items marked CHANGE are different from the code today.
+`mobile/lib/ui/disclosure/disclosure_screen.dart` shows exactly this (strings verified identical on 2026-11-04).
 
 **App bar title:** `Your location`
 
 **Heading:** `Before we ask for location access`
 
-**What we collect** (CHANGE: adds the map and home-zone reads)
+**What we collect**
 > Your precise GPS position (latitude, longitude, time and accuracy) while you record a run, and whether your phone reports it as a mock location. We also read your current position once when the map opens, to centre it on you, and once when you add a home zone, to place it.
 
-**Why** (CHANGE: adds map and home zone)
+**Why**
 > To find the loops you run, claim the map cells inside them, and check that runs are fair. Your track is sent to our server when you finish a run. The centre point of a home zone is also stored on our server, so your name stays hidden there.
 
-**When** (CHANGE: adds the non-run reads)
+**When**
 > While a run is active, Looprun shows a notification and keeps recording even if you lock the screen or switch to another app. Outside a run it reads your location only for the map and home zone actions above. It never records in the background when no run is active.
 
-**Sharing** (CHANGE: new item)
+**Sharing**
 > We do not show ads and we do not share your location with anyone. Other players see which cells you own, never your route. The map images are loaded from [MAP_TILE_PROVIDER], which can see your IP address and the area you view.
 
 **Your control**
 > You can hide places such as your home with Home zones in Profile, and delete your account and runs at any time.
 
-**Link** (CHANGE: new): `Privacy Policy` opening [PRIVACY_POLICY_URL].
+**Link:** a `Privacy Policy` button that opens a dialog showing [PRIVACY_POLICY_URL] as selectable text. It does not open the browser (no `url_launcher` yet), so the link is not tappable; adding `url_launcher` is recommended before release.
 
 **Buttons:** `Agree and continue` (key `disclosure_agree_button`) | `No thanks, sign out` (key `disclosure_decline_button`)
 

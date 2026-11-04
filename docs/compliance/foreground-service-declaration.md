@@ -11,7 +11,7 @@ Where: Play Console > Policy and programs > App content > Foreground service per
 
 ## 1. Functionality (paste, proposal)
 
-> Looprun is a running game. When the user taps Start run, the app starts a foreground service of type location that keeps the app alive and recording the user's GPS position for the duration of that run, shown by a persistent notification. The recorded track is uploaded to our server after the run to calculate the route, closed loops and map cells the user claims. The service runs only during a run the user started and stops when the user ends it in the app. Outside a run the app does not collect location in the background.
+> Looprun is a running game. When the user taps Start run, the app starts a foreground service of type location that keeps the app alive and recording the user's GPS position for the duration of that run, shown by a persistent notification. The recorded track is uploaded to our server after the run to calculate the route, closed loops and map cells the user claims. The service runs only during a run the user started and stops when the user ends it, with the Stop button in the notification or in the app. Outside a run the app does not collect location in the background.
 
 ## 2. User impact if interrupted (paste, proposal)
 

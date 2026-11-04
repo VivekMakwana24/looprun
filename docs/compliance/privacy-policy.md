@@ -14,7 +14,7 @@ Looprun is a running game. You run a closed loop outdoors, and the map cells ins
 
 ## When the app reads your location
 
-1. **During a run you start.** After you tap Start, the app records your precise position (latitude, longitude, time, accuracy) in a foreground service with a visible notification, also when the screen is off or you use another app. It stops when you stop the run in the app.
+1. **During a run you start.** After you tap Start, the app records your precise position (latitude, longitude, time, accuracy) in a foreground service with a visible notification, also when the screen is off or you use another app. It stops when you stop the run, with the Stop button in the notification or in the app.
 2. **Briefly, while the app is open and you use the map or home zones.** The app reads your current position once to centre the map when the map opens (only if you already allowed location), and once when you add a home zone, to place the zone at your position.
 
 The app never reads your location in the background when no run is active, and it does not request "allow all the time" location.
@@ -28,10 +28,15 @@ The app never reads your location in the background when no run is active, and i
 | **Home zones** (centre point and radius, up to five) | Yes. A centre point is a precise location, usually your home; we store it. | So that your name never shows on cells in those zones |
 | **Account data from Google sign-in**: Google account ID and display name (Google's first name if present, otherwise the full name, at most 40 characters) | Yes | Create and recognise your account; the name is shown to other players |
 | **Your Google email address** | **No.** It is part of the Google sign-in token our server checks, but we do not store it. | Sign-in |
-| **The map area you are viewing** (a bounding box, not your position) | Sent with each request to load cells; it is not stored as a history, but may appear in server access logs | Show claimed cells |
-| **Reports you send** | The server can store them (they are deleted automatically after 180 days), but the app does not offer reporting yet | Abuse review |
+| **The map area you are viewing** (a bounding box, not your position) | Sent with each request to load cells, and with the live-update connection (see below); it is not stored as a history, but may appear in server access logs | Show claimed cells |
+| **Live map updates** | While the map is open, the app keeps a WebSocket connection to our server. It carries the map area you are viewing (a bounding box, in the connection address) and, in the first message, your sign-in token. The server sends back which cells changed. Nothing from it is stored beyond ordinary access logs. | Keep the map current |
+| **Reports you send** (Report a cell, or Report a problem with a run) | Yes. The report holds your **free-text reason (up to 500 characters, whatever you type)**, the id of the run or cell you report, and your account. It is deleted automatically after 180 days, or earlier if you delete your account. | Abuse review |
 
-We do not collect your contacts, photos, microphone or camera, and we do not use advertising identifiers. The app does not yet send crash reports or analytics.
+**Please do not put personal details (your own or anyone else's) in a report.** We do not collect your contacts, photos, microphone or camera, and we do not use advertising identifiers. The app does not yet send crash reports or analytics.
+
+## What stays on your phone
+
+The app keeps the raw GPS points of your finished runs in a database on your phone, so that a run can be uploaded again if the connection fails. **These points stay on your phone until you delete your account in the app or uninstall the app**; signing out does not remove them. The app is set not to be included in Android/Google backups (`allowBackup` is off). Deleting your account in the app wipes this data for that account.
 
 ## Third parties that see something
 
@@ -69,11 +74,13 @@ What the server does today:
 
 ## Deleting your account
 
-In the app: Profile > Delete account. Deletion runs in two steps so that it can be resumed if something interrupts it: first your account is marked as being deleted (it can no longer upload runs or use the app, and open live connections are closed), then your cell power, runs, raw GPS, run processing records, the reports you filed and finally the account record itself are removed. If a step is interrupted you can simply repeat the request and it finishes. Your home zones are part of the account record and go with it. Cells you owned are **handed to the strongest remaining player in that cell**, or become free if nobody else has any power there; your name is removed from them. Backups are overwritten within 14 days. You can also write to [CONTACT_EMAIL] from the address you use with Google and we will do it for you. Instructions are also available at [ACCOUNT_DELETION_URL].
+In the app: Profile > Delete account. Deletion runs in two steps so that it can be resumed if something interrupts it: first your account is marked as being deleted (it can no longer upload runs or use the app, and open live connections are closed), then your cell power, runs, raw GPS, run processing records, the reports you filed and finally the account record itself are removed. If a step is interrupted you can simply repeat the request and it finishes. Your home zones are part of the account record and go with it. Cells you owned are **handed to the strongest remaining player in that cell**, or become free if nobody else has any power there; your name is removed from them. Backups are overwritten within 14 days.
+
+**Without the app (web request).** Instructions and a deletion request page are at [ACCOUNT_DELETION_URL] **[to do: this page does not exist yet; see `README.md`]**. Our server does not store your email address, only your Google account ID and display name, so we cannot find an account from an email address, and we will not delete an account on an unverified email request, because anyone could ask for someone else's account to be deleted. The page therefore has you prove you own the account by signing in with Google. If you no longer have the app, install it again, sign in with the same Google account and use Profile > Delete account. If none of that works, write to [CONTACT_EMAIL]; we will explain what we can do, but we cannot delete an account we cannot verify as yours.
 
 ## Your rights
 
-If GDPR applies to you, you can ask for access, correction, deletion, restriction and a portable copy, object to processing based on legitimate interests, withdraw consent at any time, and complain to a data protection authority. Write to [CONTACT_EMAIL]; we aim to reply within one month.
+If GDPR applies to you, you can ask for access, correction, deletion, restriction and a portable copy, object to processing based on legitimate interests, withdraw consent at any time, and complain to a data protection authority. Write to [CONTACT_EMAIL]; we aim to reply within one month. Because we do not store your email address, we may ask you to verify the account by signing in before we act on a request about your data.
 
 ## Children
 

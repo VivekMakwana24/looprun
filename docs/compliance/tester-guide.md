@@ -18,14 +18,15 @@ Thanks for helping. You will install an early version of Looprun on your Android
 4. Go to Run and tap Start. Run or walk a loop outdoors of **at least 600 metres in length (roughly 1 km is safer), enclosing a real block or park**, ending near where you started. Very small loops are rejected as too small.
 5. Lock the phone halfway. The Looprun notification should stay. Unlock: progress should still show.
 6. Stop the run, either with the Stop button in the notification or inside the app. Check the result screen: distance, time, cells claimed.
-7. Open the map and find your cells. Open the leaderboard.
-8. Profile: add a home zone, try the freeze option, then end it.
-9. Run again another day over some of the same streets.
-10. Optional, on a throwaway account: Profile > Delete account, and confirm you are signed out.
+7. Open the map and find your cells. Open the leaderboard. The map should update by itself when another tester takes a cell (live updates; others' changes appear after about 30 minutes, by design).
+8. Try **Report a cell** on the map and **Report a problem with this run** on a result screen. The reason is free text and is stored for 180 days: do not type personal details.
+9. Profile: add a home zone, try the freeze option, then end it.
+10. Run again another day over some of the same streets.
+11. Optional, on a throwaway account: Profile > Delete account, and confirm you are signed out.
 
 Please do not use fake GPS apps unless the organiser asks you to, and run safely.
 
-**Not in this build, so please do not test or report as missing:** reporting a run or cell, live map updates (the map refreshes when you move or zoom it), crash reporting.
+**Not in this build, so please do not test or report as missing:** crash reporting and the web account-deletion page (deleting works inside the app only for now).
 
 ## 3. Report bugs
 
@@ -37,4 +38,4 @@ Variety matters more than flagships: Samsung, Xiaomi / Redmi / POCO, Google Pixe
 
 ## 5. Privacy during the test
 
-Precise location during a run, a one-off position to centre the map and to place home zones, the home-zone centre, and your Google account ID and first name are used. The map picture comes from [MAP_TILE_PROVIDER]. Delete your account in the app at any time; policy: [PRIVACY_POLICY_URL].
+Precise location during a run, a one-off position to centre the map and to place home zones, the home-zone centre, and your Google account ID and first name are used. The map picture comes from [MAP_TILE_PROVIDER]. Raw GPS of your finished runs also stays on your phone until you delete your account or uninstall. Free-text reports you send are stored for 180 days. Delete your account in the app at any time; policy: [PRIVACY_POLICY_URL].

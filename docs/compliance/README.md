@@ -22,7 +22,7 @@ Everything here is a draft written from the code as of 2026-11-03 (verifier repo
 | `[HOSTING_REGION]` | AWS region of the Lightsail instance (for example Frankfurt, eu-central-1) | privacy-policy |
 | `[MAP_TILE_PROVIDER]` | Production map tile / style provider (name and host) chosen for `MAP_STYLE_URL` | privacy-policy, location-disclosure, data-safety-answers |
 | `[PRIVACY_POLICY_URL]` | Public URL of the hosted privacy policy | tester-guide, location-disclosure, Play Console |
-| `[ACCOUNT_DELETION_URL]` | Public URL describing how to delete an account (can be the policy section) | data-safety-answers, Play Console |
+| `[ACCOUNT_DELETION_URL]` | **Operator to-do.** Public web page where a user can start account deletion without the app (Play rule), naming Looprun / the developer. Needs a Sign in with Google step because the server stores no email; the policy section alone is not enough | privacy-policy, data-safety-answers, Play Console |
 | `[OPT_IN_LINK]` | Closed-test opt-in URL from Play Console | tester-guide |
 | `[TEST_START]`, `[TEST_END]` | First and last day of the 14-day test | tester-guide |
 | `[FEEDBACK_CHANNEL]` | Where testers send bug reports besides email | tester-guide |
@@ -31,13 +31,17 @@ Values that are facts and not placeholders: owner-name delay on the map is 30 mi
 
 ## Not in this build (do not advertise or test these yet)
 
-- Reporting a run or a cell (the server has `POST /v1/reports`; the app has no report screen).
-- (Done in code, phase 2, not yet device-tested) Live map updates over WebSocket (`/v1/live`, token sent in the first message) and a report-a-cell / report-a-run action. List them in the store texts only after the device test.
+- (Done in code, phase 2, not yet device-tested) Live map updates over WebSocket (`/v1/live`, token sent in the first message) and report-a-cell / report-a-run with a free-text reason (`POST /v1/reports`). The privacy policy, Data safety answers and tester guide now describe them; do not advertise them in the store texts until the device test.
+- A web page for requesting account deletion without the app (Play requirement; see below).
 - Firebase, Crashlytics and Play Integrity (planned; the app sends no crash reports and sends `integrity_token` as null).
-- A link to the privacy policy inside the in-app disclosure screen.
+- A tappable privacy policy link in the disclosure screen: the app shows the URL in a selectable dialog only (no `url_launcher`). The hosted policy must still be reachable from the app per Play; add `url_launcher` before release if possible.
 - iOS.
 
 When one of these ships, update the matching documents (privacy policy, data safety, listing) in the same release.
+
+## Account deletion without the app (open requirement)
+
+The server stores only `google_sub` and a display name, no email. A deletion request by email therefore cannot be matched to an account, and it would be unsafe to act on one (anyone could name someone else). The compliance texts say: in-app Profile > Delete account is the primary route; reinstall and sign in is the fallback; the web page at `[ACCOUNT_DELETION_URL]` must verify ownership by Sign in with Google and then run the existing delete flow. Building that page (a static page plus a call to the delete endpoint with a Google ID token) is **not done and is a to-do for the operator**; the Data safety form cannot be submitted truthfully until it exists.
 
 ## Verify-before-submitting items
 
