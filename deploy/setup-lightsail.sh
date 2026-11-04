@@ -109,6 +109,7 @@ fi
 if [ -f "$APP_DIR/deploy/backup.sh" ]; then
   chmod +x "$APP_DIR/deploy/backup.sh"
   mkdir -p /var/backups/looprun
+  chmod 700 /var/backups/looprun
   cat > /etc/cron.d/looprun-backup <<CRONEOF
 # Daily at 03:15 server time. Logs to /var/log/looprun-backup.log
 15 3 * * * root APP_DIR=$APP_DIR $APP_DIR/deploy/backup.sh >> /var/log/looprun-backup.log 2>&1
