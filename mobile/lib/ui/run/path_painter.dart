@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'run_controller.dart';
+import '../../domain/recorder/geo.dart';
 
 /// Draws the recorded path scaled to fit the box (no map tiles needed).
 class PathPainter extends CustomPainter {

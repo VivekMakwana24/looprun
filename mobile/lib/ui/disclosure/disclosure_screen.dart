@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config.dart';
-import '../../core/providers.dart';
-import '../auth/auth_controller.dart';
-
-const String _prefKey = 'location_disclosure_accepted_v1';
+import '../auth/auth_view_model.dart';
+import 'disclosure_view_model.dart';
 
 /// Texts must match docs/compliance/location-disclosure.md ("In-app screen text (must match code)").
 const String disclosureTitle = 'Your location';
@@ -31,18 +29,6 @@ String disclosureSharing(String tileProvider) =>
     'you own, never your route. The map images are loaded from $tileProvider, which can see your IP '
     'address and the area you view.';
 
-class DisclosureController extends Notifier<bool> {
-  @override
-  bool build() => ref.watch(prefsProvider).getBool(_prefKey) ?? false;
-
-  Future<void> accept() async {
-    await ref.read(prefsProvider).setBool(_prefKey, true);
-    state = true;
-  }
-}
-
-final disclosureProvider = NotifierProvider<DisclosureController, bool>(DisclosureController.new);
-
 /// Shown before any location or notification permission prompt.
 /// The system prompt is only triggered by the "Agree and continue" button.
 class DisclosureScreen extends ConsumerStatefulWidget {
@@ -57,13 +43,8 @@ class _DisclosureScreenState extends ConsumerState<DisclosureScreen> {
 
   Future<void> _agree() async {
     setState(() => _busy = true);
-    try {
-      // Ask for the permission first, then record the acceptance (which swaps this screen out).
-      await ref.read(permissionGatewayProvider).requestLocation();
-    } catch (_) {
-      // Location is asked for again when a run starts, so do not block the user here.
-    }
-    await ref.read(disclosureProvider.notifier).accept();
+    // Asks for the permission first, then records the acceptance (which makes the router leave this screen).
+    await ref.read(disclosureViewModelProvider.notifier).accept();
   }
 
   void _showPolicy() {
@@ -123,7 +104,7 @@ class _DisclosureScreenState extends ConsumerState<DisclosureScreen> {
               ),
               TextButton(
                 key: const Key('disclosure_decline_button'),
-                onPressed: _busy ? null : () => ref.read(authProvider.notifier).signOut(),
+                onPressed: _busy ? null : () => ref.read(authViewModelProvider.notifier).signOut(),
                 child: const Text('No thanks, sign out'),
               ),
             ],

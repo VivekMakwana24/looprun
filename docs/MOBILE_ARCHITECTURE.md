@@ -30,21 +30,31 @@ Sources: Flutter's own "Guide to app architecture" and its "Architecture recomme
 
 ```
 lib/
-  main.dart, app.dart, router.dart
-  core/            config, theme, formatting, result/error types
+  main.dart, app.dart, router.dart   (go_router; appRedirect() is the one routing rule)
+  core/            config, theme, formatting, AppException
   domain/recorder/ state machine, gps health, geo math (pure Dart)
   data/
-    services/      api_service, location_service, foreground_service, token_store
-    db/            app_database (Drift), tables, connection
-    repositories/  run_repository, cell_repository, auth_repository, profile_repository
-    models/        immutable models matching docs/CONTRACT.openapi.yaml
-    upload/        backoff, upload_queue (pure Dart, store behind an interface)
+    providers.dart Riverpod DI: services, stores, repositories (tests override these with fakes)
+    services/      api_service (interface + Dio impl), location_service, permission_service,
+                   foreground_service (notification Stop button), google_auth_service, live_service (/live WebSocket),
+                   token_store
+    db/            app_database (Drift), run_store (interface) + drift_run_store, connection
+    repositories/  run_repository, cell_repository, auth_repository, profile_repository, location_repository
+    models/        immutable models matching docs/CONTRACT.openapi.yaml, recording_snapshot, api_exception
+    upload/        backoff, upload_queue (pure Dart, store behind an interface), drift_upload_store
   ui/
-    core/          shared widgets
-    auth/ disclosure/ map/ run/ run_result/ leaderboard/ profile/   (view + view_model per feature)
+    core/          shared widgets (report dialog) and text helpers
+    auth/ disclosure/ home/ map/ run/ run_result/ leaderboard/ profile/   (view + view_model per feature)
 test/
-  fakes/  domain/  data/  ui/
+  fakes/  domain/  data/  ui/  architecture_test.dart
 ```
+
+Notes on where the guide's boxes landed:
+
+- `RunRepository` owns the recorder session (start, pause, resume, stop, crash recovery, upload retry). View models never see a plugin.
+- `LocationRepository` is the small read-only helper for the map and the disclosure screen (permission state, one position).
+- Repositories take services and stores, never each other. `data/providers.dart` is the only place that wires them.
+- View models are Riverpod `Notifier`s (`AutoDisposeNotifier` for the map, so leaving the map closes the live socket); views only watch state and call commands.
 
 ## Rules that CI and reviews enforce
 
@@ -53,3 +63,4 @@ test/
 - Repositories do not import each other.
 - No `BuildContext` in view models or repositories.
 - Every repository and view model has a unit test using fakes.
+- `test/architecture_test.dart` checks the import rules above, so CI fails when they are broken.

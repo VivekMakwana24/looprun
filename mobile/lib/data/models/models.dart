@@ -1,4 +1,4 @@
-/// Plain Dart models for docs/CONTRACT.openapi.yaml. No Flutter imports.
+// Plain Dart models for docs/CONTRACT.openapi.yaml. No Flutter imports.
 
 double? _d(Object? v) => v is num ? v.toDouble() : null;
 int? _i(Object? v) => v is num ? v.toInt() : null;

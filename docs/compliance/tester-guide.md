@@ -17,7 +17,7 @@ Thanks for helping. You will install an early version of Looprun on your Android
 3. Open the map: it should centre on you (if not, tell us).
 4. Go to Run and tap Start. Run or walk a loop outdoors of **at least 600 metres in length (roughly 1 km is safer), enclosing a real block or park**, ending near where you started. Very small loops are rejected as too small.
 5. Lock the phone halfway. The Looprun notification should stay. Unlock: progress should still show.
-6. Stop the run inside the app (the notification has no Stop button). Check the result screen: distance, time, cells claimed.
+6. Stop the run, either with the Stop button in the notification or inside the app. Check the result screen: distance, time, cells claimed.
 7. Open the map and find your cells. Open the leaderboard.
 8. Profile: add a home zone, try the freeze option, then end it.
 9. Run again another day over some of the same streets.

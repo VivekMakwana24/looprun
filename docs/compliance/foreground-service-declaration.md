@@ -6,7 +6,7 @@ Where: Play Console > Policy and programs > App content > Foreground service per
 
 - Manifest: service with `foregroundServiceType="location"`, permissions `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, fine location, `POST_NOTIFICATIONS`. No `ACCESS_BACKGROUND_LOCATION`.
 - The service starts only from the Run screen's Start button, after location permission is granted, and stops when the run ends.
-- A persistent notification is shown while it runs. **It has no Stop button**; the run is stopped inside the app.
+- A persistent notification is shown while it runs. It has one **Stop** button, which stops and saves the run (the same as Stop in the app). The Stop button is built in code (phase 2) but has not been tried on a device yet; verify it in Gate 1.
 - Reading the current position for the map or a home zone is done while the app is open and does not use the service.
 
 ## 1. Functionality (paste, proposal)
@@ -27,7 +27,7 @@ Choose **"Background location updates (navigation, for example ride tracking)"**
 2. The in-app location disclosure appears; tap Agree and continue; show the Android location dialog; allow while using the app; allow notifications.
 3. Tap Start run; show the Run screen and the notification in the shade.
 4. Press Home, lock the screen, wait 10 seconds, unlock: notification still there, track still growing.
-5. Return to the app and stop the run in the app; the notification disappears.
+5. Tap Stop in the notification (or return to the app and stop the run there); the run is saved and the notification disappears.
 6. Show the result screen.
 
 ## Pre-submission checks

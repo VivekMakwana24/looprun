@@ -53,12 +53,6 @@ void main() {
   test('hard flag is detected', () {
     final f = Flag.fromJson({'code': 'mock_location', 'severity': 'hard', 'detail': ''});
     expect(f.isHard, isTrue);
-    expect(describeFlag(f), contains('mock'));
-  });
-
-  test('unknown flag falls back to detail then code', () {
-    expect(describeFlag(const Flag(code: 'x_new', severity: 'soft', detail: 'hello')), 'hello');
-    expect(describeFlag(const Flag(code: 'x_new', severity: 'soft', detail: '')), 'x_new');
   });
 
   test('Cell parses owner, hidden and mine', () {

@@ -1,40 +1,23 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
-import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models/models.dart';
-import '../../data/db/app_database.dart';
+import '../../data/models/recording_snapshot.dart';
 import '../../domain/recorder/gps_health.dart';
 import '../../domain/recorder/run_recorder.dart';
-import '../run_result/run_result_screen.dart';
 import 'path_painter.dart';
-import 'run_controller.dart';
-
-final recentRunsProvider = StreamProvider.autoDispose<List<RunRow>>(
-  (ref) => ref.watch(databaseProvider).watchRecentRuns(limit: 10),
-);
+import 'run_view_model.dart';
 
 class RunScreen extends ConsumerWidget {
   const RunScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.listen<RunUiState>(runControllerProvider, (prev, next) {
-      final id = next.finishedRunId;
-      if (id != null && prev?.finishedRunId != id) {
-        ref.read(runControllerProvider.notifier).acknowledge();
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => RunResultScreen(runId: id)),
-        );
-      }
-    });
-
-    final run = ref.watch(runControllerProvider);
-    final controller = ref.read(runControllerProvider.notifier);
+    final run = ref.watch(runViewModelProvider);
+    final controller = ref.read(runViewModelProvider.notifier);
     final theme = Theme.of(context);
 
     return Padding(
@@ -86,8 +69,8 @@ class RunScreen extends ConsumerWidget {
 
 class _Controls extends StatelessWidget {
   const _Controls({required this.run, required this.controller});
-  final RunUiState run;
-  final RunController controller;
+  final RecordingSnapshot run;
+  final RunViewModel controller;
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +158,7 @@ class _RecentRuns extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final runs = ref.watch(recentRunsProvider).valueOrNull ?? const <RunRow>[];
+    final runs = ref.watch(recentRunsProvider).valueOrNull ?? const <RunSummary>[];
     if (runs.isEmpty) return const SizedBox.shrink();
     return SizedBox(
       height: 150,
@@ -190,23 +173,16 @@ class _RecentRuns extends ConsumerWidget {
                   .toString()
                   .substring(0, 16)),
               subtitle: Text(_summary(r)),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => RunResultScreen(runId: r.id)),
-              ),
+              onTap: () => context.push('/run/${r.id}'),
             ),
         ],
       ),
     );
   }
 
-  String _summary(RunRow r) {
-    final raw = r.resultJson;
-    if (raw != null) {
-      try {
-        final s = RunStatus.fromJson((jsonDecode(raw) as Map).cast<String, dynamic>());
-        if (!s.isProcessing) return s.status.replaceAll('_', ' ');
-      } catch (_) {}
-    }
-    return r.upload == 'failed' ? 'upload failed' : 'uploading';
+  String _summary(RunSummary r) {
+    final result = r.result;
+    if (result != null && !result.isProcessing) return result.status.replaceAll('_', ' ');
+    return r.uploadFailed ? 'upload failed' : 'uploading';
   }
 }

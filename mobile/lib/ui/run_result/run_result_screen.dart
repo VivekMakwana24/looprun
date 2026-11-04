@@ -1,17 +1,11 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
-import '../../core/providers.dart';
 import '../../data/models/models.dart';
-import '../../data/db/app_database.dart';
-import '../../data/upload/upload_queue.dart';
-
-final runRowProvider = StreamProvider.autoDispose.family<RunRow?, String>(
-  (ref, id) => ref.watch(databaseProvider).watchRun(id),
-);
+import '../core/flag_text.dart';
+import '../core/report_dialog.dart';
+import 'run_result_view_model.dart';
 
 class RunResultScreen extends ConsumerWidget {
   const RunResultScreen({super.key, required this.runId});
@@ -19,58 +13,53 @@ class RunResultScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final row = ref.watch(runRowProvider(runId)).valueOrNull;
+    final run = ref.watch(runResultProvider(runId)).valueOrNull;
     return Scaffold(
       appBar: AppBar(title: const Text('Run result')),
-      body: row == null
+      body: run == null
           ? const Center(child: CircularProgressIndicator())
-          : _Body(row: row),
+          : _Body(run: run),
     );
   }
 }
 
 class _Body extends ConsumerWidget {
-  const _Body({required this.row});
-  final RunRow row;
+  const _Body({required this.run});
+  final RunSummary run;
 
-  RunStatus? _result() {
-    final raw = row.resultJson;
-    if (raw == null) return null;
-    try {
-      return RunStatus.fromJson((jsonDecode(raw) as Map).cast<String, dynamic>());
-    } catch (_) {
-      return null;
-    }
+  Future<void> _report(BuildContext context, WidgetRef ref) async {
+    final reason = await askReportReason(context, title: 'Report a problem with this run');
+    if (reason == null || !context.mounted) return;
+    final message = await ref.read(runResultViewModelProvider).report(run.id, reason);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final result = _result();
+    final result = run.result;
     final theme = Theme.of(context);
 
-    if (row.upload == 'failed') {
+    if (run.uploadFailed) {
       return _Message(
         icon: Icons.error_outline,
         title: 'Upload did not work',
         text:
-            '${row.lastError ?? 'Unknown error'}\n\nYour run is saved on this phone. You can try again.',
+            '${run.lastError ?? 'Unknown error'}\n\nYour run is saved on this phone. You can try again.',
         action: FilledButton(
-          onPressed: () async {
-            await ref.read(uploadQueueProvider).requeue(row.id);
-            await ref.read(uploadQueueProvider).tick();
-          },
+          onPressed: () => ref.read(runResultViewModelProvider).retryUpload(run.id),
           child: const Text('Try again'),
         ),
       );
     }
 
-    if (result == null || result.isProcessing || row.upload == UploadStage.queued.name) {
-      final retrying = row.attempts > 0;
+    if (result == null || result.isProcessing || run.uploadQueued) {
+      final retrying = run.attempts > 0;
       return _Message(
         icon: Icons.cloud_upload_outlined,
         title: result == null ? 'Uploading your run' : 'Working out your loops',
         text: retrying
-            ? 'No connection yet. Your run is saved and we will keep trying (attempt ${row.attempts + 1}).'
+            ? 'No connection yet. Your run is saved and we will keep trying (attempt ${run.attempts + 1}).'
             : 'This usually takes a few seconds. You can leave this screen; the result will be here later.',
         showProgress: true,
       );
@@ -119,6 +108,16 @@ class _Body extends ConsumerWidget {
               title: Text(describeFlag(f)),
             ),
         ],
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const Key('report_run_button'),
+            onPressed: () => _report(context, ref),
+            icon: const Icon(Icons.flag_outlined),
+            label: const Text('Report a problem with this run'),
+          ),
+        ),
       ],
     );
   }

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/providers.dart';
-import 'auth_controller.dart';
+import 'auth_view_model.dart';
 
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
@@ -22,8 +21,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = ref.watch(authProvider);
-    final showDev = ref.watch(devAuthEnabledProvider);
+    final auth = ref.watch(authViewModelProvider);
+    final showDev = ref.watch(devLoginVisibleProvider);
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -46,7 +45,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   FilledButton.icon(
                     key: const Key('google_sign_in_button'),
                     onPressed:
-                        auth.busy ? null : () => ref.read(authProvider.notifier).signInWithGoogle(),
+                        auth.busy ? null : () => ref.read(authViewModelProvider.notifier).signInWithGoogle(),
                     icon: const Icon(Icons.login),
                     label: const Text('Sign in with Google'),
                   ),
@@ -72,7 +71,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           : () {
                               final name = _devName.text.trim();
                               ref
-                                  .read(authProvider.notifier)
+                                  .read(authViewModelProvider.notifier)
                                   .signInDev(name.isEmpty ? 'dev' : name);
                             },
                       child: const Text('Dev login'),

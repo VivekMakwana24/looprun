@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/providers.dart';
-import '../../data/models/models.dart';
-
-final weeklyLeaderboardProvider = FutureProvider.autoDispose<Leaderboard>(
-  (ref) => ref.watch(apiClientProvider).weeklyLeaderboard(),
-);
+import 'leaderboard_view_model.dart';
 
 Future<void> showLeaderboardSheet(BuildContext context) {
   return showModalBottomSheet<void>(

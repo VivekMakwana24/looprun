@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../core/providers.dart';
 import '../map/map_screen.dart';
 import '../profile/profile_screen.dart';
-import '../run/recovery.dart';
-import '../run/run_controller.dart';
 import '../run/run_screen.dart';
-import '../run_result/run_result_screen.dart';
+import '../run/run_view_model.dart';
+import 'home_view_model.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -17,8 +16,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  int _index = 1;
-
   @override
   void initState() {
     super.initState();
@@ -27,16 +24,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   /// Crash recovery: a run that was still "recording" when the app started was interrupted.
   Future<void> _checkRecovery() async {
-    // A run recorded by this very process is not an interrupted one.
-    if (ref.read(runControllerProvider).isActive) return;
-    final db = ref.read(databaseProvider);
-    // A service left over from a previous process must not keep showing "Recording".
-    try {
-      await ref.read(runServiceProvider).stopIfRunning();
-    } catch (_) {}
-    final run = await db.unfinishedRun();
+    final vm = ref.read(homeViewModelProvider.notifier);
+    final run = await vm.findUnfinishedRun();
     if (run == null || !mounted) return;
-    if (ref.read(runControllerProvider).isActive) return;
     final finish = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -55,32 +45,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
     if (finish == true) {
-      final queued = await finishRecoveredRun(db, run);
+      final queued = await vm.finishRecovered(run.id);
       if (!mounted) return;
       if (queued) {
-        ref.read(uploadQueueProvider).tick();
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => RunResultScreen(runId: run.id)),
-        );
+        context.push('/run/${run.id}');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('That run was too short to keep.')),
         );
       }
     } else {
-      await db.discardRun(run.id);
+      await vm.discard(run.id);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(uploadTickerProvider);
+    ref.watch(uploadSyncProvider);
+
+    // Open the result when a run finished, whichever tab is showing (also after the notification's Stop).
+    ref.listen<String?>(runViewModelProvider.select((s) => s.finishedRunId), (previous, next) {
+      if (next != null && next != previous) {
+        ref.read(runViewModelProvider.notifier).acknowledge();
+        context.push('/run/$next');
+      }
+    });
+
+    final index = ref.watch(homeViewModelProvider);
     const pages = <Widget>[MapScreen(), RunScreen(), ProfileScreen()];
     return Scaffold(
-      body: SafeArea(child: pages[_index]),
+      body: SafeArea(child: pages[index]),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        selectedIndex: index,
+        onDestinationSelected: ref.read(homeViewModelProvider.notifier).select,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
           NavigationDestination(icon: Icon(Icons.directions_run), label: 'Run'),

@@ -32,9 +32,8 @@ Values that are facts and not placeholders: owner-name delay on the map is 30 mi
 ## Not in this build (do not advertise or test these yet)
 
 - Reporting a run or a cell (the server has `POST /v1/reports`; the app has no report screen).
-- Live map updates over WebSocket (`/v1/live`; the app does not connect to it). The map refreshes when you move or zoom it.
+- (Done in code, phase 2, not yet device-tested) Live map updates over WebSocket (`/v1/live`, token sent in the first message) and a report-a-cell / report-a-run action. List them in the store texts only after the device test.
 - Firebase, Crashlytics and Play Integrity (planned; the app sends no crash reports and sends `integrity_token` as null).
-- A Stop button inside the run notification (Stop is inside the app).
 - A link to the privacy policy inside the in-app disclosure screen.
 - iOS.
 

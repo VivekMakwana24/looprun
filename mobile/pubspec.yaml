@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_riverpod: ^2.6.1          # stay on 2.x: 3.x removed AsyncValue.valueOrNull
+  go_router: ^17.0.0                # 18.x needs material_ui/cupertino_ui; 17.x is plain Flutter
   dio: ^5.9.0
   drift: ^2.35.0                    # sqlite3 3.x with build hooks; no sqlite3_flutter_libs
   path_provider: ^2.1.5

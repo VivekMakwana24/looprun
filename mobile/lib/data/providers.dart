@@ -64,7 +64,7 @@ final runStoreProvider =
 final uploadStoreProvider =
     Provider<UploadStore>((ref) => DriftUploadStore(ref.watch(appDatabaseProvider)));
 
-final apiServiceProvider = Provider<ApiService>((ref) {
+final Provider<ApiService> apiServiceProvider = Provider<ApiService>((ref) {
   return DioApiService(
     baseUrl: AppConfig.apiBaseUrl,
     tokenProvider: () => ref.read(authRepositoryProvider).token,
@@ -85,7 +85,7 @@ final uploadQueueProvider = Provider<UploadQueue>((ref) {
 
 // ---------------------------------------------------------------- repositories
 
-final authRepositoryProvider = Provider<AuthRepository>((ref) {
+final Provider<AuthRepository> authRepositoryProvider = Provider<AuthRepository>((ref) {
   final repo = AuthRepository(
     api: ref.watch(apiServiceProvider),
     tokens: ref.watch(tokenStoreProvider),
@@ -95,7 +95,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return repo;
 });
 
-final runRepositoryProvider = Provider<RunRepository>((ref) {
+final Provider<RunRepository> runRepositoryProvider = Provider<RunRepository>((ref) {
   final repo = RunRepository(
     store: ref.watch(runStoreProvider),
     location: ref.watch(locationServiceProvider),

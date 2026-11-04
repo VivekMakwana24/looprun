@@ -55,7 +55,7 @@ class AuthRepository {
     return _exchange(idToken);
   }
 
-  /// Development only: the server accepts "dev:<name>" when LOOPRUN_DEV_AUTH=1.
+  /// Development only: the server accepts `dev:<name>` when LOOPRUN_DEV_AUTH=1.
   Future<AuthSession> signInDev(String name) => _exchange('dev:$name');
 
   Future<AuthSession> _exchange(String idToken) async {
