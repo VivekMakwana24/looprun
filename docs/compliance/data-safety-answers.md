@@ -38,7 +38,7 @@ The app downloads map tiles from [MAP_TILE_PROVIDER] (development default `demot
 
 On-device data: the raw GPS of finished runs stays in the app's local database until the account is deleted or the app uninstalled. Data that never leaves the device is not collected in Play's definition, so no row is added, but the privacy policy says so ("What stays on your phone"). The live-update WebSocket sends the viewed map area (not the user's position) and the auth token; this is covered by the rows above and adds no new data type.
 
-Do **not** tick: Financial info, Contacts, Photos and videos, Audio, Web browsing, Messages, Advertising ID. Re-check every SDK in `mobile/pubspec.yaml` before submitting.
+Do **not** tick: Financial info, Contacts, Photos and videos, Audio, Web browsing, Messages, Advertising ID. Re-check every SDK in `pubspec.yaml` before submitting.
 
 ## Section 3: Review before saving
 

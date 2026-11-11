@@ -1,5 +1,7 @@
 # Board (updated by the project manager)
 
+**Repository split (2026-11-11):** the backend lanes (E1, E2, S1-S3, SF1 and the server/deploy part of O1) are built and deployed from https://github.com/VivekMakwana24/looprun-backend. This repo is the Flutter app. Rows below are kept as history.
+
 Status values: todo, building, verifying, accepted, blocked
 
 | ID | Module | Lane | Status | Acceptance criteria |

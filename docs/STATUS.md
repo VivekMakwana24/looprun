@@ -1,6 +1,8 @@
-# Status (2026-11-04)
+# Status (2026-11-04, repo note 2026-11-11)
 
-CI on 71ec9ef: all four jobs green (Python ruff+pytest, real MongoDB/Redis integration, Flutter analyze/test/debug APK, Docker build). First successful compile of the mobile app.
+The backend (engine, server, deploy) now lives in https://github.com/VivekMakwana24/looprun-backend (see DECISIONS D9). This repo is the Flutter app only; the Python and Docker CI jobs ran there from the split on. Backend rows below describe the state at the split.
+
+CI on 71ec9ef (monorepo): all four jobs green (Python ruff+pytest, real MongoDB/Redis integration, Flutter analyze/test/debug APK, Docker build). First successful compile of the mobile app.
 
 | Lane | State |
 | --- | --- |

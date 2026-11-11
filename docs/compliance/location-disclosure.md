@@ -11,7 +11,7 @@ Google Play requires an in-app disclosure that is shown in normal use (not only 
 
 ## In-app screen text (must match code)
 
-`mobile/lib/ui/disclosure/disclosure_screen.dart` shows exactly this (strings verified identical on 2026-11-04).
+`lib/ui/disclosure/disclosure_screen.dart` shows exactly this (strings verified identical on 2026-11-04).
 
 **App bar title:** `Your location`
 

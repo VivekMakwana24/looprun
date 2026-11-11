@@ -38,5 +38,5 @@ Let D be the date the 12th tester is opted in (all 12 must stay in). The earlies
 ## After production access is granted
 
 - [ ] Create a production release from the tested build or newer, staged rollout (for example 20 percent) at first.
-- [ ] Watch server logs (Crashlytics once added) (`docs/RUNBOOK.md`) and set up the uptime monitor.
+- [ ] Watch server logs (Crashlytics once added) ([looprun-backend `docs/RUNBOOK.md`](https://github.com/VivekMakwana24/looprun-backend/blob/main/docs/RUNBOOK.md)) and set up the uptime monitor.
 - [ ] Keep the privacy policy, Data safety answers and app behaviour in sync with every release.

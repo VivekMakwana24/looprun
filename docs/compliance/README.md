@@ -27,7 +27,7 @@ Everything here is a draft written from the code as of 2026-11-03 (verifier repo
 | `[TEST_START]`, `[TEST_END]` | First and last day of the 14-day test | tester-guide |
 | `[FEEDBACK_CHANNEL]` | Where testers send bug reports besides email | tester-guide |
 
-Values that are facts and not placeholders: owner-name delay on the map is 30 minutes (server default `publish_delay_seconds` = 1800; production compose does not override it); backups are kept 14 days (`deploy/backup.sh`, `KEEP_DAYS`); raw GPS of held/rejected/failed runs expires after 30 days (`LOOPRUN_FIXES_RETENTION_DAYS`, TTL index on `run_fixes`); reports expire after 180 days (TTL index on `reports`). If you change these settings, change the privacy policy too.
+Values that are facts and not placeholders: owner-name delay on the map is 30 minutes (server default `publish_delay_seconds` = 1800, `server/app/config.py` in the backend repo https://github.com/VivekMakwana24/looprun-backend; its production compose does not override it); backups are kept 14 days (`deploy/backup.sh` in the backend repo, `KEEP_DAYS`); raw GPS of held/rejected/failed runs expires after 30 days (`LOOPRUN_FIXES_RETENTION_DAYS`, TTL index on `run_fixes`); reports expire after 180 days (TTL index on `reports`). If you change these settings, change the privacy policy too.
 
 ## Not in this build (do not advertise or test these yet)
 

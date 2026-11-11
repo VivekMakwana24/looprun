@@ -40,7 +40,7 @@ lib/
                    token_store
     db/            app_database (Drift), run_store (interface) + drift_run_store, connection
     repositories/  run_repository, cell_repository, auth_repository, profile_repository, location_repository
-    models/        immutable models matching docs/CONTRACT.openapi.yaml, recording_snapshot, api_exception
+    models/        immutable models matching docs/api/CONTRACT.openapi.yaml, recording_snapshot, api_exception
     upload/        backoff, upload_queue (pure Dart, store behind an interface), drift_upload_store
   ui/
     core/          shared widgets (report dialog) and text helpers
