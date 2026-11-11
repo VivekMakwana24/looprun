@@ -1,3 +1,8 @@
+# SNAPSHOT of the Looprun API contract. DO NOT EDIT HERE.
+# The source of truth is https://github.com/VivekMakwana24/looprun-backend (docs/CONTRACT.openapi.yaml).
+# Copied from looprun-backend at commit d282d966cffc01531fb0e846c74e7868e81f762c (file last changed in 1ca0b53b49207c1b674349000aee61ed3b892368),
+# which was split from the monorepo at VivekMakwana24/looprun commit 397fbb3. When the backend contract changes,
+# copy the file again and update this header.
 openapi: 3.0.3
 info:
   title: Looprun API

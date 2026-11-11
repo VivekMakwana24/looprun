@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F11: fails if the merged debug manifest (or the built APK) asks for ACCESS_BACKGROUND_LOCATION.
 # Looprun records only while a run is active, in a foreground service, so it must never request it.
-# Run after `flutter build apk --debug`. Argument: path to the mobile/ directory (default: parent of this script).
+# Run after `flutter build apk --debug`. Argument: path to the project root (default: parent of this script).
 set -euo pipefail
 MOBILE="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 PERM="ACCESS_BACKGROUND_LOCATION"

@@ -35,7 +35,7 @@ else
   trap 'rm -f "$TMP"' EXIT
   awk -v mark="$MARK" '
     NR == 1 {
-      print "// " mark ": imports (added by mobile/tool/patch_signing.sh)"
+      print "// " mark ": imports (added by tool/patch_signing.sh)"
       print "import java.io.FileInputStream"
       print "import java.util.Properties"
       print ""
@@ -50,7 +50,7 @@ else
       print ""
     }
     /^    buildTypes \{/ {
-      print "    // " mark ": release signing config (added by mobile/tool/patch_signing.sh)"
+      print "    // " mark ": release signing config (added by tool/patch_signing.sh)"
       print "    signingConfigs {"
       print "        create(\"release\") {"
       print "            keyAlias = keystoreProperties.getProperty(\"keyAlias\")"
