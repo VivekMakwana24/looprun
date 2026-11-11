@@ -80,11 +80,9 @@ jobs:
           cache: true
 
       - name: Generate Android scaffold
-        working-directory: mobile
         run: bash tool/bootstrap.sh
 
       - name: Inject release signing config
-        working-directory: mobile
         run: |
           bash tool/patch_signing.sh android
           # Fail the job unless the generated Gradle file really uses the release signing config.
@@ -102,23 +100,20 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           umask 077
-          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > mobile/android/app/upload-keystore.jks
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > android/app/upload-keystore.jks
           {
             echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
             echo "keyPassword=$ANDROID_KEY_PASSWORD"
             echo "keyAlias=$ANDROID_KEY_ALIAS"
             echo "storeFile=upload-keystore.jks"
-          } > mobile/android/key.properties
+          } > android/key.properties
 
       - name: Pub get
-        working-directory: mobile
         run: flutter pub get
       - name: Generate Drift code
-        working-directory: mobile
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Build release AAB
-        working-directory: mobile
         run: |
           flutter build appbundle --release \
             --dart-define=API_BASE_URL="$API_BASE_URL" \
@@ -130,7 +125,6 @@ jobs:
       # Google Play: new apps and updates must target API 36+ (since 2026-08-31, extension ended 2026-11-01;
       # developer.android.com/google/play/requirements/target-sdk). Read it from the merged release manifest.
       - name: Verify targetSdkVersion is at least 36
-        working-directory: mobile
         run: |
           manifest="$(find build/app/intermediates -path '*merged_manifests/release*' -name AndroidManifest.xml | head -n 1)"
           if [ -z "$manifest" ]; then echo '::error::merged release AndroidManifest.xml not found; cannot verify targetSdkVersion'; exit 1; fi
@@ -142,7 +136,7 @@ jobs:
 
       - name: Verify the AAB is signed with the upload key, not the debug key
         run: |
-          aab=mobile/build/app/outputs/bundle/release/app-release.aab
+          aab=build/app/outputs/bundle/release/app-release.aab
           out="$(jarsigner -verify -verbose -certs "$aab" 2>&1)" || { echo "$out" | tail -n 20; echo '::error::jarsigner could not verify the AAB'; exit 1; }
           echo "$out" | tail -n 15
           if echo "$out" | grep -qi 'Android Debug'; then
@@ -158,6 +152,6 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: looprun-release-aab
-          path: mobile/build/app/outputs/bundle/release/app-release.aab
+          path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
