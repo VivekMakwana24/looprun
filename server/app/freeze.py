@@ -119,3 +119,35 @@ async def rebase_for_freeze(db: Any, user_id: str, now: int) -> int:
         if await _cas_update(db, d, rebase):
             n += 1
     return n
+
+
+def strength(user: dict, row: dict, now: int) -> float:
+    """How much of the stored power of one of the user's cell_power rows is left at `now`, 0..1.
+
+    faded power / stored power: 1.0 during the grace period and while a freeze is running, falling towards 0
+    afterwards. A freeze that has run out but is not settled yet (settling is lazy) is counted as if it were:
+    the frozen time is forgiven, exactly as settle_freeze will do. Read-only.
+    """
+    power = row["power"]
+    if power <= 0:
+        return 0.0
+    until, started = user.get("freeze_until"), user.get("freeze_started_at")
+    if until is not None and until > now:
+        return 1.0
+    updated = row["updated_at"]
+    if until is not None and started is not None and until > started and updated < until:
+        updated += until - max(updated, started)
+    left = eng.faded_power(user["_id"], power, updated, now, None) / power
+    return max(0.0, min(1.0, left))
+
+
+def used_days(user: dict, now: int, window_days: int) -> int:
+    """Whole days (rounded up) the user was frozen inside the last window_days, the running freeze included
+    up to now. This is the "x of 30 days used in the last 90 days" figure; it only counts time that has passed."""
+    lo = now - window_days * DAY_MS
+    intervals = list(user.get("freeze_log", []))
+    until, started = user.get("freeze_until"), user.get("freeze_started_at")
+    if until is not None and started is not None:
+        intervals.append({"start": started, "end": min(now, until)})
+    total = sum(_overlap(e["start"], e["end"], lo, now) for e in intervals)
+    return -(-total // DAY_MS)

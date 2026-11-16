@@ -143,7 +143,7 @@ def test_freeze_endpoint_limits(client):
     assert client.post("/v1/me/freeze", json={"days": 31}, headers=hdr(h)).status_code == 422
     assert client.post("/v1/me/freeze", json={"days": -1}, headers=hdr(h)).status_code == 422
     assert client.post("/v1/me/freeze", json={"days": 5}, headers=hdr(h)).json()["freeze_until"]
-    assert client.post("/v1/me/freeze", json={"days": 0}, headers=hdr(h)).json() == {"freeze_until": None}
+    assert client.post("/v1/me/freeze", json={"days": 0}, headers=hdr(h)).json()["freeze_until"] is None
 
 
 # ------------------------------------------------------------------ privacy
@@ -304,7 +304,8 @@ def test_ending_a_freeze_shifts_updated_at_by_frozen_time(client, clock):
     t_run = clock.now
     client.post("/v1/me/freeze", json={"days": 30}, headers=hdr(a))
     clock.advance(days=20)
-    assert client.post("/v1/me/freeze", json={"days": 0}, headers=hdr(a)).json() == {"freeze_until": None}
+    ended = client.post("/v1/me/freeze", json={"days": 0}, headers=hdr(a)).json()
+    assert ended == {"freeze_until": None, "used_days": 20, "quota_days": 30, "window_days": 90}
     stamps = db_run(client, lambda db: db.cell_power.distinct("updated_at", {"user_id": a["_uid"]}))
     assert stamps == [t_run + 20 * 86_400_000]
     clock.advance(days=5)  # 5 days since the freeze ended: still inside the grace period

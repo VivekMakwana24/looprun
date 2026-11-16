@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from . import engine_adapter as eng
+from .freeze import strength
 from .resources import Resources
 
 CHUNK = 4000
@@ -46,11 +47,31 @@ def _cell(doc: dict, owner: dict | None, mine: bool, hidden: bool) -> dict:
     lat, lng = doc.get("lat"), doc.get("lng")
     if lat is None or lng is None:
         lat, lng = eng.cell_centre(doc["_id"])
-    return {"id": doc["_id"], "lat": lat, "lng": lng, "owner": owner, "mine": mine, "hidden": hidden}
+    return {
+        "id": doc["_id"],
+        "lat": lat,
+        "lng": lng,
+        "boundary": eng.cell_boundary(doc["_id"]),
+        "owner": owner,
+        "mine": mine,
+        "hidden": hidden,
+    }
+
+
+async def _own_strengths(res: Resources, viewer: dict, cells: list[str], now: int) -> dict[str, float]:
+    """cell -> strength (0..1) of the viewer's own power in the cells they own. Only ever computed for the viewer:
+    nobody learns how strong somebody else's hold on a cell is."""
+    out: dict[str, float] = {}
+    for i in range(0, len(cells), CHUNK):
+        q = {"user_id": viewer["_id"], "cell": {"$in": cells[i : i + CHUNK]}}
+        async for row in res.db.cell_power.find(q):
+            out[row["cell"]] = round(strength(viewer, row, now), 3)
+    return out
 
 
 async def build_views(res: Resources, docs: list[dict], viewer_id: str | None) -> list[dict]:
-    """Cell dicts {id, owner, mine, hidden} for the viewer. Cells nobody may see an owner for yet are left out."""
+    """Cell dicts {id, lat, lng, boundary, owner, mine, hidden} for the viewer, plus `strength` on the viewer's own
+    cells only. Cells nobody may see an owner for yet are left out."""
     s = res.settings
     now = res.clock()
     delay_ms = s.publish_delay_seconds * 1000
@@ -73,6 +94,10 @@ async def build_views(res: Resources, docs: list[dict], viewer_id: str | None) -
     to_check = [d["_id"] for d, o in chosen if o != viewer_id and o in users]
     neighbours = await _users_in_neighbourhoods(res.db, to_check, s.privacy_ring) if to_check else {}
 
+    own = [d["_id"] for d, o in chosen if o == viewer_id]
+    viewer = users.get(viewer_id) if viewer_id else None
+    strengths = await _own_strengths(res, viewer, own, now) if own and viewer is not None else {}
+
     out: list[dict] = []
     for d, owner in chosen:
         cid = d["_id"]
@@ -81,7 +106,10 @@ async def build_views(res: Resources, docs: list[dict], viewer_id: str | None) -
             # a vanished or deleting owner is never shown: the cell counts as unowned until it is reassigned
             continue
         if owner == viewer_id:
-            out.append(_cell(d, {"id": owner, "name": user["name"]}, True, False))
+            view = _cell(d, {"id": owner, "name": user["name"]}, True, False)
+            if cid in strengths:
+                view["strength"] = strengths[cid]
+            out.append(view)
             continue
         zones = [(z["lat"], z["lng"], z["radius_m"]) for z in user.get("home_zones", [])]
         hidden = eng.in_home_zone(cid, zones) or len(neighbours.get(cid, ())) < s.privacy_min_users

@@ -16,6 +16,15 @@ def cell_centre(cell: str) -> tuple[float, float]:
     return (lat, lng)
 
 
+def cell_boundary(cell: str) -> list[tuple[float, float]]:
+    """Corner points of the cell as (lat, lng), in ring order and not closed.
+
+    Six points for a hexagon (five for one of the twelve pentagon cells per resolution),
+    so a client can draw the true cell shape without an H3 library.
+    """
+    return [(lat, lng) for lat, lng in h3.cell_to_boundary(cell)]
+
+
 def cells_for_bbox(
     min_lng: float, min_lat: float, max_lng: float, max_lat: float, res: int = 10
 ) -> list[str]:

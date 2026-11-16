@@ -109,6 +109,11 @@ def cell_centre(cell: str) -> tuple[float, float]:
     return tuple(engine().cell_centre(cell))  # type: ignore[return-value]
 
 
+def cell_boundary(cell: str) -> list[list[float]]:
+    """Corner points [[lat, lng], ...] of the cell (6 for a hexagon), from the engine."""
+    return [[float(lat), float(lng)] for lat, lng in engine().cell_boundary(cell)]
+
+
 def in_home_zone(cell: str, zones: list[tuple[float, float, float]]) -> bool:
     return bool(zones) and bool(engine().in_home_zone(cell, zones))
 

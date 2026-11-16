@@ -16,7 +16,7 @@ from . import auth
 from .cellview import build_views
 from .errors import RETRYABLE, LockTimeout
 from .events import iso_week, leaderboard_key
-from .freeze import quota_ok, rebase_for_freeze, settle_freeze
+from .freeze import quota_ok, rebase_for_freeze, settle_freeze, used_days
 from .models import (
     CellsResponse,
     FreezeRequest,
@@ -24,6 +24,7 @@ from .models import (
     GoogleAuthRequest,
     HomeZonesRequest,
     LeaderboardResponse,
+    MeResponse,
     ReportRequest,
     RunStatus,
     RunUpload,
@@ -229,7 +230,12 @@ async def get_run(
 
 
 # ---------------------------------------------------------------- map
-@router.get("/cells", response_model=CellsResponse, responses=errs(401, 403, 422, 429))
+@router.get(
+    "/cells",
+    response_model=CellsResponse,
+    response_model_exclude_unset=True,  # `strength` is only sent on the caller's own cells
+    responses=errs(401, 403, 422, 429),
+)
 async def get_cells(
     bbox: str = Query(...), user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
 ) -> CellsResponse:
@@ -297,10 +303,34 @@ async def leaderboard(
         {"rank": i + 1, "user": {"id": uid, "name": name}, "cells": n}
         for i, (n, name, uid) in enumerate(rows[: s.leaderboard_size])
     ]
-    return LeaderboardResponse(week=week, entries=entries)
+    # The caller's own place, also when it is below the listed entries.
+    my_rank = next((i + 1 for i, r in enumerate(rows) if r[2] == user["_id"]), None)
+    return LeaderboardResponse(week=week, entries=entries, me={"rank": my_rank, "cells": own if my_rank else 0})
 
 
 # ---------------------------------------------------------------- me
+def _freeze_status(res: Resources, user: dict, now: int) -> dict:
+    s = res.settings
+    until = user.get("freeze_until")
+    return {
+        "freeze_until": until if until is not None and until > now else None,
+        "used_days": used_days(user, now, s.freeze_window_days),
+        "quota_days": s.freeze_quota_days,
+        "window_days": s.freeze_window_days,
+    }
+
+
+@router.get("/me", response_model=MeResponse, responses=errs(401, 403))
+async def get_me(user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)) -> MeResponse:
+    """The caller's own settings: name, home zones and the state of the decay freeze. Read-only."""
+    fresh = await res.db.users.find_one({"_id": user["_id"]}) or user
+    return MeResponse(
+        user=UserRef(id=fresh["_id"], name=fresh["name"]),
+        home_zones=fresh.get("home_zones", []),
+        freeze=_freeze_status(res, fresh, res.clock()),
+    )
+
+
 @router.put("/me/home-zones", status_code=204, responses=errs(401, 403, 422))
 async def put_home_zones(
     body: HomeZonesRequest, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
@@ -330,12 +360,14 @@ async def freeze(
             raise HTTPException(409, f"At most {s.freeze_quota_days} frozen days in any {s.freeze_window_days} days")
     if running:  # end the running (or expired) freeze: forgive the paused time
         await settle_freeze(res.db, fresh, min(now, running))
-    if body.days == 0:
-        return FreezeResponse(freeze_until=None)
-    await rebase_for_freeze(res.db, user["_id"], now)  # decay that already happened stays
-    until = now + body.days * DAY_MS
-    await res.db.users.update_one({"_id": user["_id"]}, {"$set": {"freeze_until": until, "freeze_started_at": now}})
-    return FreezeResponse(freeze_until=until)
+    if body.days > 0:
+        await rebase_for_freeze(res.db, user["_id"], now)  # decay that already happened stays
+        until = now + body.days * DAY_MS
+        await res.db.users.update_one(
+            {"_id": user["_id"]}, {"$set": {"freeze_until": until, "freeze_started_at": now}}
+        )
+    after = await res.db.users.find_one({"_id": user["_id"]}) or fresh
+    return FreezeResponse(**_freeze_status(res, after, now))
 
 
 @router.delete("/me", status_code=204, responses=errs(401, 503))

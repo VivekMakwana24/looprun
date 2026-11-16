@@ -902,7 +902,8 @@ def test_websocket_frame_has_exact_keys_including_centre(client):
     with client.websocket_connect(f"/v1/live?bbox=8.6,49.9,8.8,50.1&token={a['Authorization'].split()[1]}") as ws:
         upload(client, b, square_fixes())
         msg = ws.receive_json()
-    assert set(msg) == {"type", "cell", "lat", "lng", "owner", "mine"}
+    assert set(msg) == {"type", "cell", "lat", "lng", "boundary", "owner", "mine"}  # no strength: not a's cell
+    assert msg["boundary"] == engine_adapter.cell_boundary(msg["cell"]) and len(msg["boundary"]) == 6
     lat, lng = engine_adapter.cell_centre(msg["cell"])
     assert msg["lat"] == pytest.approx(lat) and msg["lng"] == pytest.approx(lng)
     assert msg["owner"] is None

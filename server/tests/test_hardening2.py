@@ -580,7 +580,7 @@ def test_generated_openapi_documents_the_same_status_codes_as_the_contract(clien
             codes_g = set(gen["/v1" + p.replace("{id}", "{run_id}")][method]["responses"])
             assert codes_c == codes_g, (method, p, sorted(codes_c ^ codes_g))
             checked += 1
-    assert checked == 9
+    assert checked == 10
 
 
 def test_live_contract_documents_403_4401_4429_and_the_socket_cap():

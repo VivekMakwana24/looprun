@@ -119,6 +119,14 @@ paths:
                         rank: {type: integer}
                         user: {$ref: "#/components/schemas/UserRef"}
                         cells: {type: integer}
+                  me:
+                    type: object
+                    description: >
+                      The caller's own place (D10), also when it is below the listed entries. rank is null and
+                      cells is 0 when the caller holds no cells.
+                    properties:
+                      rank: {type: integer, nullable: true}
+                      cells: {type: integer}
   /me/home-zones:
     put:
       summary: Replace the user's hidden zones
@@ -163,15 +171,34 @@ paths:
         "200":
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  freeze_until: {type: integer, nullable: true}
+              schema: {$ref: "#/components/schemas/FreezeStatus"}
         "401": {description: Missing, invalid or expired token}
         "403": {description: The account is being deleted; every route except DELETE /me refuses it}
         "409": {description: The 30-days-in-90 quota would be exceeded; nothing was changed}
         "422": {description: days outside 0..30}
   /me:
+    get:
+      summary: The caller's own settings (name, home zones, freeze state and quota used)
+      description: Read-only (D10). It never settles an expired freeze; it only reports.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: "#/components/schemas/UserRef"}
+                  home_zones:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        lat: {type: number}
+                        lng: {type: number}
+                        radius_m: {type: number}
+                  freeze: {$ref: "#/components/schemas/FreezeStatus"}
+        "401": {description: Missing, invalid or expired token}
+        "403": {description: The account is being deleted; every route except DELETE /me refuses it}
     delete:
       summary: Delete the account, its runs and its cell power
       description: >
@@ -217,9 +244,10 @@ paths:
         invalid or expired token, or names a user that no longer exists closes the socket with code 4401 (no
         first message within 10 s: also 4401); a sixth concurrent socket is closed with code 4429. At most 5 sockets
         per user may be open at once. Sockets of a user that is deleted are closed with 4401.
-        Server sends JSON text frames {"type":"cell_changed","cell":"<h3>","lat":number,"lng":number,"owner":UserRef|null,"mine":bool}
-        (lat,lng = cell centre). Other people's changes arrive after the publish delay. Hidden cells are never sent
-        with an owner.
+        Server sends JSON text frames {"type":"cell_changed","cell":"<h3>","lat":number,"lng":number,
+        "boundary":[[lat,lng] x 6],"owner":UserRef|null,"mine":bool} (lat,lng = cell centre; boundary = the
+        hexagon corners, D10). A frame about the receiver's own cell (mine = true) also carries "strength" (0..1,
+        see Cell). Other people's changes arrive after the publish delay. Hidden cells are never sent with an owner.
       responses:
         "101": {description: Switching protocols}
 components:
@@ -236,6 +264,15 @@ components:
       properties:
         access_token: {type: string}
         user: {$ref: "#/components/schemas/UserRef"}
+    FreezeStatus:
+      type: object
+      properties:
+        freeze_until: {type: integer, nullable: true, description: "epoch ms; null when no freeze is running"}
+        used_days:
+          type: integer
+          description: "Whole frozen days (rounded up) inside the last window_days, the running freeze included up to now (D10)"
+        quota_days: {type: integer, example: 30}
+        window_days: {type: integer, example: 90}
     Fix:
       type: object
       required: [lat, lng, t, acc]
@@ -288,6 +325,22 @@ components:
         id: {type: string, description: H3 index at resolution 10}
         lat: {type: number, description: "Cell centre latitude (server computes it with the engine so the app needs no H3 library)"}
         lng: {type: number, description: "Cell centre longitude"}
+        boundary:
+          type: array
+          description: "The 6 corners of the hexagon as [lat, lng] pairs, in ring order, not closed (5 for one of the 12 pentagon cells). From the engine (D10)."
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items: {type: number}
         owner: {allOf: [{$ref: "#/components/schemas/UserRef"}], nullable: true}
         mine: {type: boolean}
         hidden: {type: boolean, description: "true when privacy rules hide the owner's name; owner is then null"}
+        strength:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: >
+            ONLY present when mine is true (never for other players). The caller's faded power divided by the
+            stored power at read time: 1.0 during the grace period and while a freeze runs, then falling. The app
+            draws cells below 0.5 as "fading". Running through the cell again brings it back to 1.0 (D10).

@@ -135,18 +135,20 @@ async def _serve(ws: WebSocket, res: Resources, user_id: str, bbox: tuple, accep
             v = views[0]
         else:
             lat, lng = eng.cell_centre(cell)
-            v = {"lat": lat, "lng": lng, "owner": None, "mine": False}
+            v = {"lat": lat, "lng": lng, "boundary": eng.cell_boundary(cell), "owner": None, "mine": False}
+        frame = {
+            "type": "cell_changed",
+            "cell": cell,
+            "lat": v["lat"],
+            "lng": v["lng"],
+            "boundary": v["boundary"],
+            "owner": v["owner"],
+            "mine": v["mine"],
+        }
+        if v["mine"] and "strength" in v:
+            frame["strength"] = v["strength"]  # the receiver's own cell only
         async with send_lock:
-            await ws.send_json(
-                {
-                    "type": "cell_changed",
-                    "cell": cell,
-                    "lat": v["lat"],
-                    "lng": v["lng"],
-                    "owner": v["owner"],
-                    "mine": v["mine"],
-                }
-            )
+            await ws.send_json(frame)
 
     async def pump() -> None:
         loop = asyncio.get_running_loop()

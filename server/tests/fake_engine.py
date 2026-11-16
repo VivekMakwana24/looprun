@@ -143,6 +143,10 @@ def cell_centre(cell: str):
     return h3.cell_to_latlng(cell)
 
 
+def cell_boundary(cell: str):
+    return [(lat, lng) for lat, lng in h3.cell_to_boundary(cell)]
+
+
 def in_home_zone(cell: str, zones) -> bool:
     lat, lng = h3.cell_to_latlng(cell)
     c = Fix(lat, lng, 0, 0)

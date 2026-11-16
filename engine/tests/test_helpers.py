@@ -10,6 +10,7 @@ import pytest
 
 from looprun_engine import (
     Config,
+    cell_boundary,
     cell_centre,
     cells_for_bbox,
     gpx_to_fixes,
@@ -25,6 +26,24 @@ def test_cell_centre_roundtrip():
     lat, lng = cell_centre(cell)
     assert h3.latlng_to_cell(lat, lng, 10) == cell
     assert (lat, lng) == h3.cell_to_latlng(cell)
+
+
+def test_cell_boundary_is_the_h3_hexagon():
+    cell = h3.latlng_to_cell(50.0, 8.7, 10)
+    ring = cell_boundary(cell)
+    assert len(ring) == 6 and len(set(ring)) == 6
+    assert ring == [tuple(p) for p in h3.cell_to_boundary(cell)]
+    lat, lng = cell_centre(cell)
+    # every corner is about one edge length (res 10: roughly 66-76 m) from the centre
+    for vlat, vlng in ring:
+        assert 40 < h3.great_circle_distance((lat, lng), (vlat, vlng), unit="m") < 110
+    assert min(p[0] for p in ring) < lat < max(p[0] for p in ring)
+    assert min(p[1] for p in ring) < lng < max(p[1] for p in ring)
+
+
+def test_cell_boundary_of_a_pentagon_has_five_corners():
+    pentagon = next(iter(h3.get_pentagons(10)))
+    assert len(cell_boundary(pentagon)) == 5
 
 
 def test_cells_for_bbox_covers_every_point():

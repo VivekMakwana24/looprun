@@ -73,9 +73,13 @@ class CellOut(BaseModel):
     id: str
     lat: float
     lng: float
+    # Corner points [lat, lng] of the hexagon (D10), so the app draws true cells without an H3 library.
+    boundary: list[list[float]] = []
     owner: UserRef | None = None
     mine: bool = False
     hidden: bool = False
+    # Only present on the caller's own cells (mine = true): faded power / stored power, 0..1.
+    strength: float | None = Field(default=None, ge=0, le=1)
 
 
 class CellsResponse(BaseModel):
@@ -88,9 +92,17 @@ class LeaderboardEntry(BaseModel):
     cells: int
 
 
+class LeaderboardMe(BaseModel):
+    # None when the caller holds no cells (not ranked).
+    rank: int | None = None
+    cells: int = 0
+
+
 class LeaderboardResponse(BaseModel):
     week: str
     entries: list[LeaderboardEntry]
+    # The caller's own place, also when it is below the listed entries (D10).
+    me: LeaderboardMe = LeaderboardMe()
 
 
 class HomeZone(BaseModel):
@@ -107,8 +119,22 @@ class FreezeRequest(BaseModel):
     days: int = Field(ge=0, le=30)
 
 
-class FreezeResponse(BaseModel):
-    freeze_until: int | None
+class FreezeStatus(BaseModel):
+    freeze_until: int | None = None
+    # Whole frozen days (rounded up) inside the last `window_days`, the running freeze included up to now.
+    used_days: int = 0
+    quota_days: int = 30
+    window_days: int = 90
+
+
+class FreezeResponse(FreezeStatus):
+    pass
+
+
+class MeResponse(BaseModel):
+    user: UserRef
+    home_zones: list[HomeZone] = []
+    freeze: FreezeStatus
 
 
 class ReportRequest(BaseModel):

@@ -60,6 +60,7 @@ def apply_claim(cell: str, powers: dict[str, CellPower], current_owner: str | No
 
 def cells_for_bbox(min_lng: float, min_lat: float, max_lng: float, max_lat: float, res: int = 10) -> list[str]
 def cell_centre(cell: str) -> tuple[float, float]   # (lat, lng)
+def cell_boundary(cell: str) -> list[tuple[float, float]]   # corner points (lat, lng); 6 for a hexagon (D10)
 def in_home_zone(cell: str, zones: list[tuple[float, float, float]]) -> bool  # (lat,lng,radius_m)
 def gpx_to_fixes(gpx_text: str) -> list[Fix]          # used by the replay tool and tests
 ```
