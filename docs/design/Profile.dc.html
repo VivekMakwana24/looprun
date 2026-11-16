@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Looprun profile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.lr{--bg:#0A0C0B;--surface:#121513;--raised:#181C19;--line:#262C28;--text:#F2F5EE;--text2:#C9CFC8;--muted:#A9B1A9;--accent:#C8F560;--accent-text:#C8F560;--on-accent:#0A0C0B;--rival:#FF7A45;--map:#0D100E;--park:#111A13;--road:#181D1A;--lane:#222824;--hid-fill:#262C28;--hid-line:#69726A;--paper:#F2F5EE;--on-paper:#0A0C0B;--dot:#FFFFFF;--dot-ring:#0A0C0B;--danger:#FF8A7A}
+.lr[data-theme="tartan"]{--bg:#170B09;--surface:#22110D;--raised:#2C1711;--line:#40231B;--text:#FBEFE9;--text2:#E3CFC6;--muted:#C2A69B;--accent:#FF5B3A;--accent-text:#FF7A5C;--on-accent:#170B09;--rival:#8FD0FF;--map:#1C0E0B;--park:#24140F;--road:#2B1812;--lane:#3A2019;--hid-fill:#33201A;--hid-line:#8C6F64;--paper:#FBEFE9;--on-paper:#170B09;--dot:#FFFFFF;--dot-ring:#170B09;--danger:#FFB4A6}
+.lr[data-theme="dawn"]{--bg:#F3EFE7;--surface:#FFFFFF;--raised:#F8F5EF;--line:#DDD6C9;--text:#15181A;--text2:#3A4044;--muted:#5C6368;--accent:#FF5A1F;--accent-text:#B93A08;--on-accent:#15181A;--rival:#2F6BE6;--map:#E9E4D8;--park:#DCE5CF;--road:#FFFFFF;--lane:#DDD6C9;--hid-fill:#D9D3C7;--hid-line:#7A746A;--paper:#15181A;--on-paper:#F3EFE7;--dot:#15181A;--dot-ring:#FFFFFF;--danger:#B3261E}
+.lr[data-theme="trail"]{--bg:#0C1411;--surface:#121D18;--raised:#18251F;--line:#26372F;--text:#EEF3EC;--text2:#C7D2C8;--muted:#9FB0A4;--accent:#F6B93B;--accent-text:#F6B93B;--on-accent:#0C1411;--rival:#7FD8E8;--map:#0F1814;--park:#14241B;--road:#1A2A22;--lane:#22332B;--hid-fill:#22302A;--hid-line:#6C8074;--paper:#EEF3EC;--on-paper:#0C1411;--dot:#FFFFFF;--dot-ring:#0C1411;--danger:#FF9A8A}
+.lr a{color:var(--accent-text)}
+</style>
+</helmet>
+<div class="lr" data-theme="{{theme}}" style="width: 390px; height: 1040px; box-sizing: border-box; background: var(--bg); color: var(--text); font-family: 'Barlow', system-ui, sans-serif; display: flex; flex-direction: column">
+
+<div style="padding: 22px 20px 20px; display: flex; flex-direction: column; gap: 20px; flex-grow: 1">
+
+<div style="display: flex; align-items: flex-end; justify-content: space-between">
+<h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 60px; line-height: 0.88; letter-spacing: 0.01em">YOU</h1>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-bottom: 4px">
+<div style="font-size: 17px; font-weight: 600">Vivek</div>
+<div style="font-size: 13px; color: var(--muted)">Signed in with Google</div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 22px; background: var(--surface)">
+<div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--line)">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 44px; line-height: 0.95; color: var(--accent-text)">128</div>
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.16em; color: var(--muted)">CELLS HELD</div>
+</div>
+<div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 2px">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 44px; line-height: 0.95">#4</div>
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.16em; color: var(--muted)">THIS WEEK</div>
+</div>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.16em; color: var(--muted)">THEME</h2>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<button type="button" aria-pressed="{{isNight}}" onClick="{{pickNight}}" style="height: 78px; border-radius: 18px; border: 2px solid {{ringNight}}; background: var(--surface); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 0; cursor: pointer">
+<span aria-hidden="true" style="width: 46px; height: 26px; border-radius: 8px; background: #0A0C0B; border: 1px solid #3A413C; box-sizing: border-box; display: flex; align-items: center; justify-content: center"><span style="width: 22px; height: 6px; border-radius: 3px; background: #C8F560; display: block"></span></span>
+Night
+</button>
+<button type="button" aria-pressed="{{isTartan}}" onClick="{{pickTartan}}" style="height: 78px; border-radius: 18px; border: 2px solid {{ringTartan}}; background: var(--surface); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 0; cursor: pointer">
+<span aria-hidden="true" style="width: 46px; height: 26px; border-radius: 8px; background: #2C1711; border: 1px solid #5A3226; box-sizing: border-box; display: flex; align-items: center; justify-content: center"><span style="width: 22px; height: 6px; border-radius: 3px; background: #FF5B3A; display: block"></span></span>
+Tartan
+</button>
+<button type="button" aria-pressed="{{isDawn}}" onClick="{{pickDawn}}" style="height: 78px; border-radius: 18px; border: 2px solid {{ringDawn}}; background: var(--surface); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 0; cursor: pointer">
+<span aria-hidden="true" style="width: 46px; height: 26px; border-radius: 8px; background: #F3EFE7; border: 1px solid #BDB5A6; box-sizing: border-box; display: flex; align-items: center; justify-content: center"><span style="width: 22px; height: 6px; border-radius: 3px; background: #FF5A1F; display: block"></span></span>
+Dawn
+</button>
+<button type="button" aria-pressed="{{isTrail}}" onClick="{{pickTrail}}" style="height: 78px; border-radius: 18px; border: 2px solid {{ringTrail}}; background: var(--surface); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 0; cursor: pointer">
+<span aria-hidden="true" style="width: 46px; height: 26px; border-radius: 8px; background: #121D18; border: 1px solid #3A4F44; box-sizing: border-box; display: flex; align-items: center; justify-content: center"><span style="width: 22px; height: 6px; border-radius: 3px; background: #F6B93B; display: block"></span></span>
+Trail
+</button>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.16em; color: var(--muted)">HOME ZONES</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.4; color: var(--text2)">Cells inside a zone never show your name.</p>
+</div>
+<div style="border: 1px solid var(--line); border-radius: 22px; background: var(--surface); display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 12px; height: 54px; padding: 0 6px 0 16px; border-bottom: 1px solid var(--line)">
+<span aria-hidden="true" style="width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 2px dashed var(--hid-line); display: block"></span>
+<span style="font-size: 16px; font-weight: 600; flex-grow: 1">Zone 1</span>
+<span style="font-size: 14px; color: var(--muted)">300 m radius</span>
+<button type="button" aria-label="Remove zone 1" style="width: 44px; height: 44px; border: 0; background: none; color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; height: 54px; padding: 0 6px 0 16px; border-bottom: 1px solid var(--line)">
+<span aria-hidden="true" style="width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 2px dashed var(--hid-line); display: block"></span>
+<span style="font-size: 16px; font-weight: 600; flex-grow: 1">Zone 2</span>
+<span style="font-size: 14px; color: var(--muted)">150 m radius</span>
+<button type="button" aria-label="Remove zone 2" style="width: 44px; height: 44px; border: 0; background: none; color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+<button type="button" style="height: 52px; border: 0; background: none; color: var(--accent-text); font-family: inherit; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; cursor: pointer">
+<span>Add a zone where I am now</span>
+<span style="font-weight: 500; color: var(--muted)">2 of 5 used</span>
+</button>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.16em; color: var(--muted)">REST DAYS</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.4; color: var(--text2)">Injured or travelling? Pause the fading of your cells for up to 30 days.</p>
+</div>
+<div style="border: 1px solid var(--line); border-radius: 22px; background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; font-size: 14px"><span style="font-weight: 600">12 of 30 days used</span><span style="color: var(--muted)">in the last 90 days</span></div>
+<div role="img" aria-label="12 of 30 rest days used" style="height: 8px; border-radius: 4px; background: var(--line)"><div style="width: 40%; height: 8px; border-radius: 4px; background: var(--accent)"></div></div>
+</div>
+<button type="button" style="height: 50px; border-radius: 18px; border: 1px solid var(--line); background: var(--raised); color: var(--text); font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer">Start rest days</button>
+</div>
+</section>
+
+<div style="display: flex; flex-direction: column; border-top: 1px solid var(--line)">
+<button type="button" style="height: 52px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--text); font-family: inherit; font-size: 16px; font-weight: 500; text-align: left; padding: 0; cursor: pointer">Privacy Policy</button>
+<a href="SignIn.dc.html" style="height: 52px; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 16px; font-weight: 500; display: flex; align-items: center">Sign out</a>
+<button type="button" style="min-height: 60px; border: 0; background: none; color: var(--danger); font-family: inherit; font-size: 16px; font-weight: 600; text-align: left; padding: 8px 0; display: flex; flex-direction: column; gap: 2px; justify-content: center; cursor: pointer">
+<span>Delete my account</span>
+<span style="font-size: 13px; font-weight: 400; color: var(--muted)">Removes your runs and gives up your cells</span>
+</button>
+</div>
+
+</div>
+
+<nav aria-label="Main" style="display: flex; border-top: 1px solid var(--line); background: var(--surface)">
+<a href="Main.dc.html" style="flex: 1 1 0; height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: var(--muted); border-top: 3px solid transparent; margin-top: -1px">
+<span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 13px; line-height: 1">1</span>
+<span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 16px; letter-spacing: 0.12em; line-height: 1">MAP</span>
+</a>
+<a href="Leaderboard.dc.html" style="flex: 1 1 0; height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: var(--muted); border-left: 1px solid var(--line); border-top: 3px solid transparent; margin-top: -1px">
+<span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 13px; line-height: 1">2</span>
+<span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 16px; letter-spacing: 0.12em; line-height: 1">BOARD</span>
+</a>
+<a href="Profile.dc.html" aria-current="page" style="flex: 1 1 0; height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: var(--text); border-left: 1px solid var(--line); border-top: 3px solid var(--accent); margin-top: -1px">
+<span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 13px; color: var(--accent-text); line-height: 1">3</span>
+<span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 16px; letter-spacing: 0.12em; line-height: 1">YOU</span>
+</a>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["night","tartan","dawn","trail"],"default":"night","section":"Theme"},"$preview":{"width":390,"height":1040}}'>
+class Component extends DCLogic {
+renderVals() {
+const s = this.state || {};
+const theme = s.theme ?? this.props.theme ?? 'night';
+const ring = (t) => (theme === t ? 'var(--accent)' : 'var(--line)');
+return {
+theme: theme,
+isNight: theme === 'night',
+isTartan: theme === 'tartan',
+isDawn: theme === 'dawn',
+isTrail: theme === 'trail',
+ringNight: ring('night'),
+ringTartan: ring('tartan'),
+ringDawn: ring('dawn'),
+ringTrail: ring('trail'),
+pickNight: () => this.setState({ theme: 'night' }),
+pickTartan: () => this.setState({ theme: 'tartan' }),
+pickDawn: () => this.setState({ theme: 'dawn' }),
+pickTrail: () => this.setState({ theme: 'trail' })
+};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Looprun run result</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.lr{--bg:#0A0C0B;--surface:#121513;--raised:#181C19;--line:#262C28;--text:#F2F5EE;--text2:#C9CFC8;--muted:#A9B1A9;--accent:#C8F560;--accent-text:#C8F560;--on-accent:#0A0C0B;--rival:#FF7A45;--map:#0D100E;--park:#111A13;--road:#181D1A;--lane:#222824;--hid-fill:#262C28;--hid-line:#69726A;--paper:#F2F5EE;--on-paper:#0A0C0B;--dot:#FFFFFF;--dot-ring:#0A0C0B;--danger:#FF8A7A}
+.lr[data-theme="tartan"]{--bg:#170B09;--surface:#22110D;--raised:#2C1711;--line:#40231B;--text:#FBEFE9;--text2:#E3CFC6;--muted:#C2A69B;--accent:#FF5B3A;--accent-text:#FF7A5C;--on-accent:#170B09;--rival:#8FD0FF;--map:#1C0E0B;--park:#24140F;--road:#2B1812;--lane:#3A2019;--hid-fill:#33201A;--hid-line:#8C6F64;--paper:#FBEFE9;--on-paper:#170B09;--dot:#FFFFFF;--dot-ring:#170B09;--danger:#FFB4A6}
+.lr[data-theme="dawn"]{--bg:#F3EFE7;--surface:#FFFFFF;--raised:#F8F5EF;--line:#DDD6C9;--text:#15181A;--text2:#3A4044;--muted:#5C6368;--accent:#FF5A1F;--accent-text:#B93A08;--on-accent:#15181A;--rival:#2F6BE6;--map:#E9E4D8;--park:#DCE5CF;--road:#FFFFFF;--lane:#DDD6C9;--hid-fill:#D9D3C7;--hid-line:#7A746A;--paper:#15181A;--on-paper:#F3EFE7;--dot:#15181A;--dot-ring:#FFFFFF;--danger:#B3261E}
+.lr[data-theme="trail"]{--bg:#0C1411;--surface:#121D18;--raised:#18251F;--line:#26372F;--text:#EEF3EC;--text2:#C7D2C8;--muted:#9FB0A4;--accent:#F6B93B;--accent-text:#F6B93B;--on-accent:#0C1411;--rival:#7FD8E8;--map:#0F1814;--park:#14241B;--road:#1A2A22;--lane:#22332B;--hid-fill:#22302A;--hid-line:#6C8074;--paper:#EEF3EC;--on-paper:#0C1411;--dot:#FFFFFF;--dot-ring:#0C1411;--danger:#FF9A8A}
+.lr a{color:var(--accent-text)}
+</style>
+</helmet>
+<div class="lr" data-theme="{{theme}}" style="width: 390px; height: 900px; box-sizing: border-box; padding: 20px 20px 22px; background: var(--bg); color: var(--text); font-family: 'Barlow', system-ui, sans-serif; display: flex; flex-direction: column; gap: 16px">
+
+<div style="display: flex; align-items: center; justify-content: space-between; height: 44px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.16em; color: var(--muted)">RUN RESULT</div>
+<div style="font-size: 15px; font-weight: 500">Mon 16 Nov, 06:42</div>
+</div>
+<a href="Main.dc.html" aria-label="Close and go to the map" style="width: 44px; height: 44px; border-radius: 16px; border: 1px solid var(--line); color: var(--text); display: flex; align-items: center; justify-content: center; text-decoration: none">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+</a>
+</div>
+
+<sc-if value="{{isAccepted}}" hint-placeholder-val="{{true}}">
+<div style="position: relative; background: var(--paper); color: var(--on-paper); border-radius: 24px; overflow: hidden; display: flex; flex-direction: column">
+<span aria-hidden="true" style="position: absolute; left: 12px; top: 12px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg)"></span>
+<span aria-hidden="true" style="position: absolute; right: 12px; top: 12px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg)"></span>
+<div style="padding: 30px 24px 14px; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: 0.16em">LOOP CLOSED</div>
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.14em; border: 1.5px solid var(--on-paper); border-radius: 999px; padding: 3px 10px">ACCEPTED</div>
+</div>
+<div style="display: flex; align-items: flex-end; gap: 14px">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 168px; line-height: 0.82; letter-spacing: -0.02em">42</div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px">
+<svg aria-hidden="true" width="64" height="58" viewBox="0 0 84 76" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"><path d="M14 58 C6 42 10 24 26 14 S58 4 70 16 S82 46 68 60 S28 74 14 58 Z"></path></svg>
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 20px; letter-spacing: 0.12em; line-height: 1.05">CELLS<br>CLAIMED</div>
+</div>
+</div>
+</div>
+<div style="background: var(--accent); color: var(--on-accent); padding: 14px 24px; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600">
+<span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 28px; line-height: 1">9</span>
+taken from other runners
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isPending}}" hint-placeholder-val="{{false}}">
+<div style="position: relative; background: var(--paper); color: var(--on-paper); border-radius: 24px; overflow: hidden; display: flex; flex-direction: column">
+<span aria-hidden="true" style="position: absolute; left: 12px; top: 12px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg)"></span>
+<span aria-hidden="true" style="position: absolute; right: 12px; top: 12px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg)"></span>
+<div style="padding: 30px 24px 18px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: 0.16em">UNDER REVIEW</div>
+<div style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 92px; line-height: 0.86">ON HOLD</div>
+<div style="font-size: 16px; font-weight: 500; line-height: 1.4">No cells yet. This run is waiting for a review before any cells are given.</div>
+</div>
+<div style="background: var(--on-paper); color: var(--paper); padding: 14px 24px; display: flex; align-items: flex-start; gap: 10px; font-size: 15px; line-height: 1.4">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M5 21V4M5 4h11l-2 4 2 4H5"></path></svg>
+<span>Part of this run looked too fast for running.</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isProcessing}}" hint-placeholder-val="{{false}}">
+<div style="position: relative; background: var(--paper); color: var(--on-paper); border-radius: 24px; overflow: hidden; display: flex; flex-direction: column">
+<span aria-hidden="true" style="position: absolute; left: 12px; top: 12px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg)"></span>
+<span aria-hidden="true" style="position: absolute; right: 12px; top: 12px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg)"></span>
+<div style="padding: 30px 24px 24px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: 0.16em">RUN UPLOADED</div>
+<div style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 78px; line-height: 0.88">COUNTING CELLS</div>
+<div style="font-size: 16px; font-weight: 500; line-height: 1.4">We are finding your loop and the cells inside it. You can leave this screen. The result will be here when it is ready.</div>
+</div>
+</div>
+</sc-if>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 22px; background: var(--surface)">
+<div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line)">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.16em; color: var(--muted)">DISTANCE</div>
+<div style="display: flex; align-items: baseline; gap: 6px"><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 38px; line-height: 1">5.21</span><span style="font-size: 14px; color: var(--text2)">km</span></div>
+</div>
+<div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid var(--line)">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.16em; color: var(--muted)">MOVING TIME</div>
+<div style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 38px; line-height: 1">31:48</div>
+</div>
+<div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--line)">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.16em; color: var(--muted)">AVERAGE PACE</div>
+<div style="display: flex; align-items: baseline; gap: 6px"><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 38px; line-height: 1">6:06</span><span style="font-size: 14px; color: var(--text2)">/km</span></div>
+</div>
+<div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 2px">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.16em; color: var(--muted)">LOOP AREA</div>
+<div style="display: flex; align-items: baseline; gap: 6px"><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 38px; line-height: 1">{{loopArea}}</span><span style="font-size: 14px; color: var(--text2)">{{loopUnit}}</span></div>
+</div>
+</div>
+
+<sc-if value="{{isAccepted}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.4; color: var(--text2)">
+<div style="display: flex; gap: 10px; align-items: flex-start">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="flex: none; margin-top: 1px; color: var(--accent-text)"><path d="M4 12a8 8 0 1 0 3-6.2"></path><path d="M4 4v5h5"></path></svg>
+<span>You stopped 60 m short of your start, so we joined the gap for you.</span>
+</div>
+<div style="display: flex; gap: 10px; align-items: flex-start">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="flex: none; margin-top: 1px; color: var(--accent-text)"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg>
+<span>Other runners see your new cells in about 30 minutes.</span>
+</div>
+</div>
+</sc-if>
+
+<div style="margin-top: auto; display: flex; flex-direction: column; gap: 6px">
+<a href="Main.dc.html" style="height: 68px; border-radius: 24px; background: var(--accent); color: var(--on-accent); text-decoration: none; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 28px; letter-spacing: 0.03em">SEE IT ON THE MAP</a>
+<button type="button" style="height: 46px; border: 0; background: none; color: var(--text2); font-family: inherit; font-size: 15px; font-weight: 500; text-decoration: underline; cursor: pointer">Report a problem with this run</button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["night","tartan","dawn","trail"],"default":"night","section":"Theme"},"status":{"editor":"enum","options":["accepted","pending_review","processing"],"default":"accepted","section":"State"},"$preview":{"width":390,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+const status = this.props.status ?? 'accepted';
+const accepted = status === 'accepted';
+return {
+theme: this.props.theme ?? 'night',
+isAccepted: accepted,
+isPending: status === 'pending_review',
+isProcessing: status === 'processing',
+loopArea: accepted ? '0.63' : 'Not yet',
+loopUnit: accepted ? 'km²' : ''
+};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-11-16T17:25:00Z"},
+  "title": "Looprun app redesign",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 940, "y": 0, "w": 390, "h": 844, "title": "03 Map (home)", "is_interactive": true, "radius": 36},
+    "SignIn.dc.html": {"x": 0, "y": 0, "w": 390, "h": 844, "title": "01 Sign in", "is_interactive": true, "radius": 36},
+    "Disclosure.dc.html": {"x": 470, "y": 0, "w": 390, "h": 1200, "title": "02 Location disclosure", "is_interactive": true, "radius": 36},
+    "Run.dc.html": {"x": 1410, "y": 0, "w": 390, "h": 844, "title": "04 Live run", "is_interactive": true, "radius": 36},
+    "Result.dc.html": {"x": 1880, "y": 0, "w": 390, "h": 900, "title": "05 Run result", "is_interactive": true, "radius": 36},
+    "Leaderboard.dc.html": {"x": 2350, "y": 0, "w": 390, "h": 844, "title": "06 The board", "is_interactive": true, "radius": 36},
+    "Profile.dc.html": {"x": 2820, "y": 0, "w": 390, "h": 1040, "title": "07 You", "is_interactive": true, "radius": 36}
+  },
+  "order": [
+    "Main.dc.html",
+    "SignIn.dc.html",
+    "Disclosure.dc.html",
+    "Run.dc.html",
+    "Result.dc.html",
+    "Leaderboard.dc.html",
+    "Profile.dc.html"
+  ],
+  "notes": {
+    "title": {"x": 0, "y": -300, "text": "Looprun · Night Track", "kind": "title1", "maxW": 3210}
+  },
+  "designSystems": []
+}

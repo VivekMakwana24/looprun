@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Looprun location disclosure</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.lr{--bg:#0A0C0B;--surface:#121513;--raised:#181C19;--line:#262C28;--text:#F2F5EE;--text2:#C9CFC8;--muted:#A9B1A9;--accent:#C8F560;--accent-text:#C8F560;--on-accent:#0A0C0B;--rival:#FF7A45;--map:#0D100E;--park:#111A13;--road:#181D1A;--lane:#222824;--hid-fill:#262C28;--hid-line:#69726A;--paper:#F2F5EE;--on-paper:#0A0C0B;--dot:#FFFFFF;--dot-ring:#0A0C0B;--danger:#FF8A7A}
+.lr[data-theme="tartan"]{--bg:#170B09;--surface:#22110D;--raised:#2C1711;--line:#40231B;--text:#FBEFE9;--text2:#E3CFC6;--muted:#C2A69B;--accent:#FF5B3A;--accent-text:#FF7A5C;--on-accent:#170B09;--rival:#8FD0FF;--map:#1C0E0B;--park:#24140F;--road:#2B1812;--lane:#3A2019;--hid-fill:#33201A;--hid-line:#8C6F64;--paper:#FBEFE9;--on-paper:#170B09;--dot:#FFFFFF;--dot-ring:#170B09;--danger:#FFB4A6}
+.lr[data-theme="dawn"]{--bg:#F3EFE7;--surface:#FFFFFF;--raised:#F8F5EF;--line:#DDD6C9;--text:#15181A;--text2:#3A4044;--muted:#5C6368;--accent:#FF5A1F;--accent-text:#B93A08;--on-accent:#15181A;--rival:#2F6BE6;--map:#E9E4D8;--park:#DCE5CF;--road:#FFFFFF;--lane:#DDD6C9;--hid-fill:#D9D3C7;--hid-line:#7A746A;--paper:#15181A;--on-paper:#F3EFE7;--dot:#15181A;--dot-ring:#FFFFFF;--danger:#B3261E}
+.lr[data-theme="trail"]{--bg:#0C1411;--surface:#121D18;--raised:#18251F;--line:#26372F;--text:#EEF3EC;--text2:#C7D2C8;--muted:#9FB0A4;--accent:#F6B93B;--accent-text:#F6B93B;--on-accent:#0C1411;--rival:#7FD8E8;--map:#0F1814;--park:#14241B;--road:#1A2A22;--lane:#22332B;--hid-fill:#22302A;--hid-line:#6C8074;--paper:#EEF3EC;--on-paper:#0C1411;--dot:#FFFFFF;--dot-ring:#0C1411;--danger:#FF9A8A}
+.lr a{color:var(--accent-text)}
+</style>
+</helmet>
+<div class="lr" data-theme="{{theme}}" style="width: 390px; height: 1200px; box-sizing: border-box; padding: 28px 24px 24px; background: var(--bg); color: var(--text); font-family: 'Barlow', system-ui, sans-serif; display: flex; flex-direction: column; gap: 26px">
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 8px; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent-text)">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"></path><circle cx="12" cy="9.5" r="2.5"></circle></svg>
+Your location
+</div>
+<h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 38px; line-height: 1; letter-spacing: 0.01em">Before we ask for location access</h1>
+</div>
+
+<div style="display: flex; flex-direction: column">
+
+<section style="display: flex; gap: 14px">
+<div aria-hidden="true" style="width: 14px; display: flex; flex-direction: column; align-items: center">
+<span style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; border: 3px solid var(--accent); margin-top: 3px"></span>
+<span style="width: 2px; flex-grow: 1; background: var(--line)"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 22px">
+<h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 17px; letter-spacing: 0.1em; text-transform: uppercase">What we collect</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--text2)">Your precise GPS position (latitude, longitude, time and accuracy) while you record a run, and whether your phone reports it as a mock location. We also read your current position once when the map opens, to centre it on you, and once when you add a home zone, to place it.</p>
+</div>
+</section>
+
+<section style="display: flex; gap: 14px">
+<div aria-hidden="true" style="width: 14px; display: flex; flex-direction: column; align-items: center">
+<span style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; border: 3px solid var(--accent); margin-top: 3px"></span>
+<span style="width: 2px; flex-grow: 1; background: var(--line)"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 22px">
+<h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 17px; letter-spacing: 0.1em; text-transform: uppercase">Why</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--text2)">To find the loops you run, claim the map cells inside them, and check that runs are fair. Your track is sent to our server when you finish a run. The centre point of a home zone is also stored on our server, so your name stays hidden there.</p>
+</div>
+</section>
+
+<section style="display: flex; gap: 14px">
+<div aria-hidden="true" style="width: 14px; display: flex; flex-direction: column; align-items: center">
+<span style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; border: 3px solid var(--accent); margin-top: 3px"></span>
+<span style="width: 2px; flex-grow: 1; background: var(--line)"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 22px">
+<h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 17px; letter-spacing: 0.1em; text-transform: uppercase">When</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--text2)">While a run is active, Looprun shows a notification and keeps recording even if you lock the screen or switch to another app. Outside a run it reads your location only for the map and home zone actions above. It never records in the background when no run is active.</p>
+</div>
+</section>
+
+<section style="display: flex; gap: 14px">
+<div aria-hidden="true" style="width: 14px; display: flex; flex-direction: column; align-items: center">
+<span style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; border: 3px solid var(--accent); margin-top: 3px"></span>
+<span style="width: 2px; flex-grow: 1; background: var(--line)"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 22px">
+<h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 17px; letter-spacing: 0.1em; text-transform: uppercase">Sharing</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--text2)">We do not show ads and we do not share your location with anyone. Other players see which cells you own, never your route. The map images are loaded from [MAP_TILE_PROVIDER], which can see your IP address and the area you view.</p>
+</div>
+</section>
+
+<section style="display: flex; gap: 14px">
+<div aria-hidden="true" style="width: 14px; display: flex; flex-direction: column; align-items: center">
+<span style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; background: var(--accent); margin-top: 3px"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 17px; letter-spacing: 0.1em; text-transform: uppercase">Your control</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--text2)">You can hide places such as your home with Home zones in Profile, and delete your account and runs at any time.</p>
+</div>
+</section>
+
+</div>
+
+<div style="margin-top: auto; display: flex; flex-direction: column; gap: 10px">
+<button type="button" style="align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; color: var(--accent-text); font-family: inherit; font-size: 15px; font-weight: 600; text-decoration: underline; cursor: pointer">Privacy Policy</button>
+<a href="Main.dc.html" style="display: flex; align-items: center; justify-content: center; height: 62px; border-radius: 22px; background: var(--accent); color: var(--on-accent); text-decoration: none; font-size: 18px; font-weight: 600">Agree and continue</a>
+<a href="SignIn.dc.html" style="display: flex; align-items: center; justify-content: center; height: 50px; border-radius: 22px; color: var(--text2); text-decoration: none; font-size: 16px; font-weight: 500">No thanks, sign out</a>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["night","tartan","dawn","trail"],"default":"night","section":"Theme"},"$preview":{"width":390,"height":1200}}'>
+class Component extends DCLogic {
+renderVals() {
+return { theme: this.props.theme ?? 'night' };
+}
+}
+</script>
+</body>
+</html>

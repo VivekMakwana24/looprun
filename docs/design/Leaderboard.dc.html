@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Looprun weekly board</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.lr{--bg:#0A0C0B;--surface:#121513;--raised:#181C19;--line:#262C28;--text:#F2F5EE;--text2:#C9CFC8;--muted:#A9B1A9;--accent:#C8F560;--accent-text:#C8F560;--on-accent:#0A0C0B;--rival:#FF7A45;--map:#0D100E;--park:#111A13;--road:#181D1A;--lane:#222824;--hid-fill:#262C28;--hid-line:#69726A;--paper:#F2F5EE;--on-paper:#0A0C0B;--dot:#FFFFFF;--dot-ring:#0A0C0B;--danger:#FF8A7A}
+.lr[data-theme="tartan"]{--bg:#170B09;--surface:#22110D;--raised:#2C1711;--line:#40231B;--text:#FBEFE9;--text2:#E3CFC6;--muted:#C2A69B;--accent:#FF5B3A;--accent-text:#FF7A5C;--on-accent:#170B09;--rival:#8FD0FF;--map:#1C0E0B;--park:#24140F;--road:#2B1812;--lane:#3A2019;--hid-fill:#33201A;--hid-line:#8C6F64;--paper:#FBEFE9;--on-paper:#170B09;--dot:#FFFFFF;--dot-ring:#170B09;--danger:#FFB4A6}
+.lr[data-theme="dawn"]{--bg:#F3EFE7;--surface:#FFFFFF;--raised:#F8F5EF;--line:#DDD6C9;--text:#15181A;--text2:#3A4044;--muted:#5C6368;--accent:#FF5A1F;--accent-text:#B93A08;--on-accent:#15181A;--rival:#2F6BE6;--map:#E9E4D8;--park:#DCE5CF;--road:#FFFFFF;--lane:#DDD6C9;--hid-fill:#D9D3C7;--hid-line:#7A746A;--paper:#15181A;--on-paper:#F3EFE7;--dot:#15181A;--dot-ring:#FFFFFF;--danger:#B3261E}
+.lr[data-theme="trail"]{--bg:#0C1411;--surface:#121D18;--raised:#18251F;--line:#26372F;--text:#EEF3EC;--text2:#C7D2C8;--muted:#9FB0A4;--accent:#F6B93B;--accent-text:#F6B93B;--on-accent:#0C1411;--rival:#7FD8E8;--map:#0F1814;--park:#14241B;--road:#1A2A22;--lane:#22332B;--hid-fill:#22302A;--hid-line:#6C8074;--paper:#EEF3EC;--on-paper:#0C1411;--dot:#FFFFFF;--dot-ring:#0C1411;--danger:#FF9A8A}
+.lr a{color:var(--accent-text)}
+</style>
+</helmet>
+<div class="lr" data-theme="{{theme}}" style="width: 390px; height: 844px; box-sizing: border-box; background: var(--bg); color: var(--text); font-family: 'Barlow', system-ui, sans-serif; display: flex; flex-direction: column">
+
+<div style="padding: 22px 20px 0; display: flex; flex-direction: column; gap: 14px; flex-grow: 1">
+
+<div style="display: flex; align-items: flex-end; justify-content: space-between">
+<h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 60px; line-height: 0.88; letter-spacing: 0.01em">THE BOARD</h1>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-bottom: 4px">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.16em; color: var(--accent-text)">WEEK 47</div>
+<div style="font-size: 13px; color: var(--muted)">Resets Monday</div>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line)">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 46px; line-height: 0.9; color: var(--accent-text)">13</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 15px; font-weight: 600">cells to move up a lane</div>
+<div style="font-size: 13px; color: var(--muted)">Meera holds lane 3 with 141</div>
+</div>
+</div>
+
+<ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border-bottom: 1px solid var(--line)">
+
+<li style="display: flex; align-items: center; gap: 14px; height: 57px; border-top: 1px solid var(--line)">
+<span style="width: 26px; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 30px; color: var(--muted)">1</span>
+<div style="flex: 1 1 0; display: flex; flex-direction: column; gap: 7px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 16px; font-weight: 600">Asha</span><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 24px; line-height: 1">212</span></div>
+<div style="height: 6px; border-radius: 3px; background: var(--line)"><div style="width: 100%; height: 6px; border-radius: 3px; background: var(--muted)"></div></div>
+</div>
+</li>
+
+<li style="display: flex; align-items: center; gap: 14px; height: 57px; border-top: 1px solid var(--line)">
+<span style="width: 26px; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 30px; color: var(--muted)">2</span>
+<div style="flex: 1 1 0; display: flex; flex-direction: column; gap: 7px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 16px; font-weight: 600">Rohan</span><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 24px; line-height: 1">187</span></div>
+<div style="height: 6px; border-radius: 3px; background: var(--line)"><div style="width: 88%; height: 6px; border-radius: 3px; background: var(--muted)"></div></div>
+</div>
+</li>
+
+<li style="display: flex; align-items: center; gap: 14px; height: 57px; border-top: 1px solid var(--line)">
+<span style="width: 26px; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 30px; color: var(--muted)">3</span>
+<div style="flex: 1 1 0; display: flex; flex-direction: column; gap: 7px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 16px; font-weight: 600">Meera</span><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 24px; line-height: 1">141</span></div>
+<div style="height: 6px; border-radius: 3px; background: var(--line)"><div style="width: 66.5%; height: 6px; border-radius: 3px; background: var(--muted)"></div></div>
+</div>
+</li>
+
+<li aria-current="true" style="display: flex; align-items: center; gap: 14px; height: 64px; border-top: 1px solid var(--line); margin: 0 -20px; padding: 0 20px; background: var(--raised)">
+<span style="width: 26px; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 34px; color: var(--accent-text)">4</span>
+<div style="flex: 1 1 0; display: flex; flex-direction: column; gap: 7px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 17px; font-weight: 600">You</span><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 28px; line-height: 1; color: var(--accent-text)">128</span></div>
+<div style="height: 8px; border-radius: 4px; background: var(--line)"><div style="width: 60%; height: 8px; border-radius: 4px; background: var(--accent)"></div></div>
+</div>
+</li>
+
+<li style="display: flex; align-items: center; gap: 14px; height: 57px; border-top: 1px solid var(--line)">
+<span style="width: 26px; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 30px; color: var(--muted)">5</span>
+<div style="flex: 1 1 0; display: flex; flex-direction: column; gap: 7px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 16px; font-weight: 600">Kabir</span><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 24px; line-height: 1">96</span></div>
+<div style="height: 6px; border-radius: 3px; background: var(--line)"><div style="width: 45%; height: 6px; border-radius: 3px; background: var(--muted)"></div></div>
+</div>
+</li>
+
+<li style="display: flex; align-items: center; gap: 14px; height: 57px; border-top: 1px solid var(--line)">
+<span style="width: 26px; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 30px; color: var(--muted)">6</span>
+<div style="flex: 1 1 0; display: flex; flex-direction: column; gap: 7px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 16px; font-weight: 600">Tara</span><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 24px; line-height: 1">74</span></div>
+<div style="height: 6px; border-radius: 3px; background: var(--line)"><div style="width: 35%; height: 6px; border-radius: 3px; background: var(--muted)"></div></div>
+</div>
+</li>
+
+<li style="display: flex; align-items: center; gap: 14px; height: 57px; border-top: 1px solid var(--line)">
+<span style="width: 26px; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 30px; color: var(--muted)">7</span>
+<div style="flex: 1 1 0; display: flex; flex-direction: column; gap: 7px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 16px; font-weight: 600">Dev</span><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 24px; line-height: 1">51</span></div>
+<div style="height: 6px; border-radius: 3px; background: var(--line)"><div style="width: 24%; height: 6px; border-radius: 3px; background: var(--muted)"></div></div>
+</div>
+</li>
+
+<li style="display: flex; align-items: center; gap: 14px; height: 57px; border-top: 1px solid var(--line)">
+<span style="width: 26px; font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 30px; color: var(--muted)">8</span>
+<div style="flex: 1 1 0; display: flex; flex-direction: column; gap: 7px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 16px; font-weight: 600">Ira</span><span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 24px; line-height: 1">33</span></div>
+<div style="height: 6px; border-radius: 3px; background: var(--line)"><div style="width: 15.5%; height: 6px; border-radius: 3px; background: var(--muted)"></div></div>
+</div>
+</li>
+
+</ol>
+
+<div style="font-size: 13px; line-height: 1.4; color: var(--muted)">Counts cells that are already public. Your own cells count at once.</div>
+
+</div>
+
+<nav aria-label="Main" style="display: flex; border-top: 1px solid var(--line); background: var(--surface)">
+<a href="Main.dc.html" style="flex: 1 1 0; height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: var(--muted); border-top: 3px solid transparent; margin-top: -1px">
+<span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 13px; line-height: 1">1</span>
+<span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 16px; letter-spacing: 0.12em; line-height: 1">MAP</span>
+</a>
+<a href="Leaderboard.dc.html" aria-current="page" style="flex: 1 1 0; height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: var(--text); border-left: 1px solid var(--line); border-top: 3px solid var(--accent); margin-top: -1px">
+<span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 13px; color: var(--accent-text); line-height: 1">2</span>
+<span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 16px; letter-spacing: 0.12em; line-height: 1">BOARD</span>
+</a>
+<a href="Profile.dc.html" style="flex: 1 1 0; height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: var(--muted); border-left: 1px solid var(--line); border-top: 3px solid transparent; margin-top: -1px">
+<span style="font-family: 'Barlow Condensed', sans-serif; font-style: italic; font-weight: 700; font-size: 13px; line-height: 1">3</span>
+<span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 16px; letter-spacing: 0.12em; line-height: 1">YOU</span>
+</a>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["night","tartan","dawn","trail"],"default":"night","section":"Theme"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return { theme: this.props.theme ?? 'night' };
+}
+}
+</script>
+</body>
+</html>
