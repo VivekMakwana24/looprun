@@ -74,9 +74,48 @@ void main() {
   });
 
   test('freeze passes through', () async {
-    api.freezeUntil = 123;
-    expect(await repo.setFreeze(7), 123);
+    api.freezeStatus = const FreezeStatus(freezeUntil: 123, usedDays: 7, quotaDays: 30, windowDays: 90);
+    final status = await repo.setFreeze(7);
+    expect(status.freezeUntil, 123);
+    expect(status.usedDays, 7);
     expect(api.freezeCalls, [7]);
+  });
+
+  test('removeZoneAt uploads the remaining list and keeps it on the phone', () async {
+    await repo.addZoneHere(100);
+    await repo.addZoneHere(200);
+    await repo.addZoneHere(500);
+    final left = await repo.removeZoneAt(1);
+    expect(left.map((z) => z.radiusM), [100, 500]);
+    expect(api.zonePuts.last.map((z) => z.radiusM), [100, 500]);
+    expect(repo.homeZones().map((z) => z.radiusM), [100, 500]);
+    // An index that does not exist changes nothing and sends nothing.
+    final puts = api.zonePuts.length;
+    expect((await repo.removeZoneAt(9)).length, 2);
+    expect(api.zonePuts.length, puts);
+  });
+
+  test('removeZoneAt keeps the zone when the server refuses', () async {
+    await repo.addZoneHere(100);
+    api.zoneError = const ApiException(500, 'down');
+    await expectLater(repo.removeZoneAt(0), throwsA(isA<ApiException>()));
+    expect(repo.homeZones().length, 1);
+  });
+
+  test('loadMe takes the zones from the server and reports the rest-day quota', () async {
+    api.serverZones = const [HomeZone(lat: 1, lng: 2, radiusM: 300)];
+    api.freezeStatus = const FreezeStatus(usedDays: 12, quotaDays: 30, windowDays: 90);
+    final me = await repo.loadMe();
+    expect(me.freeze.usedDays, 12);
+    expect(me.freeze.hasQuota, isTrue);
+    expect(repo.homeZones().single.radiusM, 300);
+  });
+
+  test('loadMe failing keeps the zones on the phone', () async {
+    await repo.addZoneHere(100);
+    api.meError = const ApiException(null, 'offline');
+    await expectLater(repo.loadMe(), throwsA(isA<ApiException>()));
+    expect(repo.homeZones().length, 1);
   });
 
   test('deleteAccount wipes runs and zones on the phone', () async {

@@ -14,6 +14,15 @@ import '../services/location_service.dart';
 import '../services/permission_service.dart';
 import '../upload/upload_queue.dart';
 
+const String gpsStoppedMessage = 'GPS stopped sending updates. Looprun is restarting it.';
+const String gpsGaveUpMessage =
+    'GPS stopped sending updates. Check that location is switched on, or finish the run.';
+const String gpsErrorMessage = 'GPS problem. Check that location is switched on.';
+const String pausedNotificationText = 'Paused. Open Looprun to resume or finish.';
+const String notificationsOffNotice =
+    'Notifications are off for Looprun, so the recording notification and its Stop button are hidden. '
+    'Your run is still recorded.';
+
 /// Source of truth for runs. The local database is authoritative; the network is only a sync target
 /// (the upload queue). Owns the pure-Dart [RunRecorder] and feeds it fixes from [LocationService].
 ///
@@ -31,7 +40,10 @@ class RunRepository {
     String Function()? newId,
     Duration tickInterval = const Duration(seconds: 1),
     Duration pendingWriteTimeout = const Duration(seconds: 5),
+    Duration gpsRestartDelay = const Duration(seconds: 2),
+    this.maxGpsRestarts = 5,
   })  : _pendingWriteTimeout = pendingWriteTimeout,
+        _gpsRestartDelay = gpsRestartDelay,
         _store = store,
         _location = location,
         _permissions = permissions,
@@ -54,6 +66,18 @@ class RunRepository {
 
   /// How long stop() waits for fix writes that are still running before it carries on.
   final Duration _pendingWriteTimeout;
+
+  /// The platform GPS stream should run until we cancel it. When it ends or fails on its own (location
+  /// switched off, provider restarted) it is opened again after this delay, at most [maxGpsRestarts]
+  /// times in a row; a fix that arrives resets the count.
+  final Duration _gpsRestartDelay;
+  final int maxGpsRestarts;
+  int _gpsRestarts = 0;
+  Timer? _gpsRestartTimer;
+
+  /// The crash-recovery check that is still running, if any. start() waits for it, so the check can
+  /// never stop the service of a run that began a moment later (review F5).
+  Future<void>? _recoveryCheck;
 
   late final RunRecorder _recorder;
   final GpsHealthMonitor _health = GpsHealthMonitor();
@@ -99,6 +123,8 @@ class RunRepository {
     _emit(_snap.copyWith(clearError: true));
     String? createdRunId;
     try {
+      final recovery = _recoveryCheck;
+      if (recovery != null) await recovery;
       final granted = await _permissions.requestLocation();
       if (!granted) {
         _emit(_snap.copyWith(
@@ -122,13 +148,20 @@ class RunRepository {
       _actionSub = _foreground.actions.listen((action) {
         if (action == ForegroundAction.stop) unawaited(stop());
       });
-      _fixSub = _location.fixes().listen(_onFix, onError: _onFixError, onDone: _onFixesEnded);
-      _timer = Timer.periodic(_tickInterval, (_) => _tick());
+      // The notification (and its Stop button) only shows when notifications are allowed (review F4).
+      var notificationsOn = true;
+      try {
+        notificationsOn = await _permissions.notificationsAllowed();
+      } catch (_) {}
       _emit(RecordingSnapshot(
         status: RecorderStatus.recording,
         runId: runId,
         health: GpsHealth.searching,
+        notice: notificationsOn ? null : notificationsOffNotice,
       ));
+      _gpsRestarts = 0;
+      _listenForFixes();
+      _timer = Timer.periodic(_tickInterval, (_) => _tick());
     } catch (e) {
       await _teardown();
       if (_recorder.isActive) _recorder.stop();
@@ -140,15 +173,20 @@ class RunRepository {
           await _store.discardRun(createdRunId);
         } catch (_) {}
       }
-      _emit(RecordingSnapshot(error: 'Could not start the run: $e'));
+      _emit(const RecordingSnapshot(error: 'Could not start the run. Please try again.'));
     } finally {
       _starting = false;
     }
   }
 
+  void _listenForFixes() {
+    _fixSub = _location.fixes().listen(_onFix, onError: _onFixError, onDone: _onFixesEnded);
+  }
+
   Future<void> _onFix(GeoFix fix) async {
     final now = _nowMs();
     _health.onFix(now);
+    _gpsRestarts = 0;
     if (_recorder.status != RecorderStatus.recording) return;
     final runId = _recorder.runId!;
     // 1. Write to the database first, before memory or UI change.
@@ -158,7 +196,7 @@ class RunRepository {
     try {
       await write;
     } catch (e) {
-      _emit(_snap.copyWith(error: 'Could not save a GPS point: $e'));
+      _emit(_snap.copyWith(error: 'Could not save a GPS point. Check the free space on your phone.'));
       return; // do not count what was not stored
     } finally {
       _pending.remove(tracked);
@@ -170,25 +208,44 @@ class RunRepository {
       distanceM: _recorder.distanceM,
       health: _health.evaluate(now),
       path: List<PathPoint>.of(_path),
+      accuracyM: fix.acc,
+      clearError: _snap.error == gpsStoppedMessage || _snap.error == gpsErrorMessage,
     ));
   }
 
-  /// The platform GPS stream ended on its own (it should run until we cancel it).
+  /// The platform GPS stream ended on its own (it should run until we cancel it): open it again.
   void _onFixesEnded() {
-    if (_recorder.status != RecorderStatus.recording && _recorder.status != RecorderStatus.paused) return;
-    _emit(_snap.copyWith(
-      error: 'GPS stopped sending updates. Stop the run and start again if no points appear.',
-    ));
+    _fixSub = null;
+    if (!_recorder.isActive) return;
+    if (_gpsRestarts >= maxGpsRestarts) {
+      _emit(_snap.copyWith(error: gpsGaveUpMessage));
+      return;
+    }
+    _gpsRestarts++;
+    _emit(_snap.copyWith(error: gpsStoppedMessage));
+    _gpsRestartTimer?.cancel();
+    _gpsRestartTimer = Timer(_gpsRestartDelay, () {
+      _gpsRestartTimer = null;
+      if (!_recorder.isActive || _fixSub != null) return;
+      try {
+        _listenForFixes();
+      } catch (_) {
+        _onFixesEnded();
+      }
+    });
   }
 
+  /// An error event from the GPS stream. The stream may go on or end; if it ends, [_onFixesEnded] restarts it.
   void _onFixError(Object error) {
-    _emit(_snap.copyWith(error: 'GPS error: $error'));
+    if (!_recorder.isActive) return;
+    _emit(_snap.copyWith(error: gpsErrorMessage));
   }
 
   void _tick() {
     if (!_snap.isActive) return;
     final health = _health.evaluate(_nowMs());
     _emit(_snap.copyWith(elapsedMs: _recorder.elapsedMs, health: health));
+    if (_recorder.status == RecorderStatus.paused) return; // the notification says "Paused"
     if (health != _notified) {
       _notified = health;
       unawaited(_foreground.updateText(notificationTextFor(health)).catchError((Object _) {}));
@@ -199,6 +256,9 @@ class RunRepository {
     if (_recorder.status != RecorderStatus.recording) return;
     _recorder.pause();
     _emit(_snap.copyWith(status: RecorderStatus.paused, elapsedMs: _recorder.elapsedMs));
+    // The notification must not say "Recording" while paused (review F3). GPS stays on so resume is instant.
+    _notified = GpsHealth.inactive;
+    unawaited(_foreground.updateText(pausedNotificationText).catchError((Object _) {}));
     final runId = _recorder.runId;
     if (runId != null) await _store.setRunState(runId, 'paused');
   }
@@ -207,6 +267,9 @@ class RunRepository {
     if (_recorder.status != RecorderStatus.paused) return;
     _recorder.resume();
     _emit(_snap.copyWith(status: RecorderStatus.recording));
+    final health = _health.evaluate(_nowMs());
+    _notified = health;
+    unawaited(_foreground.updateText(notificationTextFor(health)).catchError((Object _) {}));
     final runId = _recorder.runId;
     if (runId != null) await _store.setRunState(runId, 'recording');
   }
@@ -219,13 +282,17 @@ class RunRepository {
     _lastStoppedAtMs = _nowMs();
     _recorder.stop(); // stopping: no new fixes are accepted
     _emit(_snap.copyWith(status: RecorderStatus.stopping, elapsedMs: _recorder.elapsedMs));
-    await _teardown();
-    // Wait for fixes whose write is still running, so the last point is not lost.
-    // Bounded: a hung disk write must not leave the screen on "Saving..." forever.
-    await Future.wait(List<Future<void>>.of(_pending)).timeout(
-      _pendingWriteTimeout,
-      onTimeout: () => <void>[],
-    );
+    try {
+      await _teardown();
+      // Wait for fixes whose write is still running, so the last point is not lost.
+      // Bounded: a hung disk write must not leave the screen on "Saving..." forever.
+      await Future.wait(List<Future<void>>.of(_pending)).timeout(
+        _pendingWriteTimeout,
+        onTimeout: () => <void>[],
+      );
+    } catch (_) {
+      // Whatever went wrong while shutting down, the run must still leave "stopping" (review F8).
+    }
     final endedAt = _recorder.endedAt ?? _nowMs();
     final elapsed = _recorder.elapsedMs;
     _recorder.finish();
@@ -243,7 +310,7 @@ class RunRepository {
     } catch (e) {
       _emit(RecordingSnapshot(
         status: RecorderStatus.finished,
-        error: 'Could not save the run: $e',
+        error: 'Could not save the run. It stays on this phone; open Looprun again to finish it.',
       ));
       return;
     }
@@ -279,6 +346,8 @@ class RunRepository {
     _actionSub = null;
     _timer?.cancel();
     _timer = null;
+    _gpsRestartTimer?.cancel();
+    _gpsRestartTimer = null;
     _health.stop();
     _notified = GpsHealth.inactive;
     try {
@@ -292,7 +361,17 @@ class RunRepository {
 
   /// A run that was still recording when the app died, or null. A leftover foreground service from the
   /// previous process is stopped first. Never reports the run this process is recording right now.
-  Future<RunSummary?> findUnfinishedRun() async {
+  Future<RunSummary?> findUnfinishedRun() {
+    final check = _findUnfinishedRun();
+    final done = check.then<void>((_) {}, onError: (Object _) {});
+    _recoveryCheck = done;
+    unawaited(done.whenComplete(() {
+      if (identical(_recoveryCheck, done)) _recoveryCheck = null;
+    }));
+    return check;
+  }
+
+  Future<RunSummary?> _findUnfinishedRun() async {
     if (isRecording) return null;
     try {
       await _foreground.stopIfRunning();

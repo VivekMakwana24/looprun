@@ -220,12 +220,42 @@ void main() {
 
   test('gives up after maxAttempts', () async {
     queue = make(policy: const BackoffPolicy(maxAttempts: 2));
-    api.uploadResults.add(const ApiException(null, 'offline'));
+    api.uploadResults.add(const ApiException(503, 'busy'));
     await queue.tick();
     expect(store.jobs['r1']!.stage, UploadStage.queued);
     now += 10000;
     await queue.tick();
     expect(store.jobs['r1']!.stage, UploadStage.failed);
+  });
+
+  test('a phone that stays offline never gives the run up (review F9)', () async {
+    queue = make(policy: const BackoffPolicy(maxAttempts: 2));
+    api.uploadResults.add(const ApiException(null, 'offline'));
+    for (var i = 0; i < 40; i++) {
+      await queue.tick();
+      expect(store.jobs['r1']!.stage, UploadStage.queued, reason: 'try ${i + 1}');
+      now += const Duration(minutes: 5).inMilliseconds;
+    }
+    expect(store.jobs['r1']!.attempts, 40);
+    // Back online: the same run goes up.
+    api.uploadResults
+      ..clear()
+      ..add(st('accepted'));
+    await queue.tick();
+    expect(store.jobs['r1']!.stage, UploadStage.done);
+  });
+
+  test('thinFixes keeps the first and last fix and never exceeds the limit (review F10)', () {
+    final fixes = [for (var i = 0; i < 1000; i++) Fix(lat: 50, lng: 8, t: i, acc: 5)];
+    expect(identical(thinFixes(fixes, max: 1000), fixes), isTrue);
+    final thin = thinFixes(fixes, max: 100);
+    expect(thin.length, lessThanOrEqualTo(100));
+    expect(thin.length, greaterThan(90));
+    expect(thin.first.t, 0);
+    expect(thin.last.t, 999);
+    for (var i = 1; i < thin.length; i++) {
+      expect(thin[i].t, greaterThan(thin[i - 1].t));
+    }
   });
 
   test('requeue puts a failed job back and it can then succeed', () async {

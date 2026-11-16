@@ -10,7 +10,9 @@ class BackoffPolicy {
   final Duration base;
   final Duration max;
 
-  /// Failures allowed before the job is given up (and shown as failed to the user).
+  /// Failures with an answer from the server (408/425/429/5xx) allowed before the job is given up and
+  /// shown as failed. Failures without an answer (no network) are never counted against this: a phone
+  /// that is offline for an hour must still upload the run afterwards (review F9).
   final int maxAttempts;
 
   /// 0..1: fraction by which the delay may vary randomly (0 = deterministic).
@@ -39,8 +41,10 @@ class BackoffPolicy {
     return statusCode >= 500;
   }
 
-  /// [failuresSoFar] counts the failure that just happened.
+  /// [failuresSoFar] counts the failure that just happened. No answer at all (offline, timeout) is
+  /// always retried; the delay is capped at [max], so this costs one small request every few minutes.
   bool shouldRetry(int? statusCode, int failuresSoFar) {
+    if (statusCode == null) return true;
     return isRetryableStatus(statusCode) && failuresSoFar < maxAttempts;
   }
 }

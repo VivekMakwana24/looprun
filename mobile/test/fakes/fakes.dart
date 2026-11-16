@@ -6,14 +6,33 @@ import 'package:looprun/data/models/models.dart';
 import 'package:looprun/data/services/api_service.dart';
 import 'package:looprun/data/services/foreground_service.dart';
 import 'package:looprun/data/services/google_auth_service.dart';
+import 'package:looprun/data/services/link_service.dart';
 import 'package:looprun/data/services/live_service.dart';
 import 'package:looprun/data/services/location_service.dart';
 import 'package:looprun/data/services/permission_service.dart';
 import 'package:looprun/data/upload/upload_queue.dart';
 import 'package:looprun/domain/recorder/run_recorder.dart';
 
-/// Lets queued microtasks and zero-delay timers run.
-Future<void> settle([int ms = 15]) => Future<void>.delayed(Duration(milliseconds: ms));
+/// Lets everything that is already scheduled run: first the event queue (microtasks, zero-delay
+/// timers, stream events), then a short real wait for the few things that use real timers
+/// (review F24: the queue drain does not depend on how fast the CI machine is).
+Future<void> settle([int ms = 15]) async {
+  for (var i = 0; i < 20; i++) {
+    await Future<void>.delayed(Duration.zero);
+  }
+  await Future<void>.delayed(Duration(milliseconds: ms));
+}
+
+class FakeLinkService implements LinkService {
+  bool result = true;
+  final List<String> opened = [];
+
+  @override
+  Future<bool> open(String url) async {
+    opened.add(url);
+    return result;
+  }
+}
 
 class FakeApiService implements ApiService {
   Session session = const Session(accessToken: 'tok', user: UserRef(id: 'u1', name: 'dev'));
@@ -25,12 +44,21 @@ class FakeApiService implements ApiService {
   final List<String> bboxes = [];
 
   Leaderboard board = const Leaderboard(week: '2026-W45', entries: []);
+  ApiException? boardError;
+  int boardCalls = 0;
 
   final List<List<HomeZone>> zonePuts = [];
   ApiException? zoneError;
 
-  int? freezeUntil;
+  /// What POST /me/freeze and GET /me report.
+  FreezeStatus freezeStatus = const FreezeStatus(usedDays: 0, quotaDays: 30, windowDays: 90);
+  ApiException? freezeError;
   final List<int> freezeCalls = [];
+
+  /// The zones the server holds (GET /me returns them; PUT replaces them).
+  List<HomeZone> serverZones = [];
+  ApiException? meError;
+  int meCalls = 0;
 
   bool deleted = false;
   final List<Map<String, String>> reports = [];
@@ -56,19 +84,35 @@ class FakeApiService implements ApiService {
   }
 
   @override
-  Future<Leaderboard> weeklyLeaderboard() async => board;
+  Future<Leaderboard> weeklyLeaderboard() async {
+    boardCalls++;
+    final e = boardError;
+    if (e != null) throw e;
+    return board;
+  }
 
   @override
   Future<void> putHomeZones(List<HomeZone> zones) async {
     final e = zoneError;
     if (e != null) throw e;
     zonePuts.add(List<HomeZone>.of(zones));
+    serverZones = List<HomeZone>.of(zones);
   }
 
   @override
-  Future<int?> setFreeze(int days) async {
+  Future<FreezeStatus> setFreeze(int days) async {
     freezeCalls.add(days);
-    return freezeUntil;
+    final e = freezeError;
+    if (e != null) throw e;
+    return freezeStatus;
+  }
+
+  @override
+  Future<MeInfo> getMe() async {
+    meCalls++;
+    final e = meError;
+    if (e != null) throw e;
+    return MeInfo(user: session.user, homeZones: List<HomeZone>.of(serverZones), freeze: freezeStatus);
   }
 
   @override
@@ -112,7 +156,11 @@ class FakeLocationService implements LocationService {
 
 class FakePermissionService implements PermissionService {
   bool granted = true;
+  bool notifications = true;
   int requests = 0;
+
+  @override
+  Future<bool> notificationsAllowed() async => notifications;
 
   @override
   Future<bool> hasLocation() async => granted;
@@ -157,10 +205,15 @@ class FakeForegroundService implements ForegroundService {
 
 class FakeGoogleAuthService implements GoogleAuthService {
   String? idToken = 'google-id-token';
+  Object? error;
   int signOuts = 0;
 
   @override
-  Future<String?> signInForIdToken() async => idToken;
+  Future<String?> signInForIdToken() async {
+    final e = error;
+    if (e != null) throw e;
+    return idToken;
+  }
 
   @override
   Future<void> signOut() async {

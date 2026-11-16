@@ -42,9 +42,17 @@ void main() {
 
   test('shouldRetry stops at maxAttempts', () {
     const p = BackoffPolicy(maxAttempts: 3);
-    expect(p.shouldRetry(null, 1), isTrue);
-    expect(p.shouldRetry(null, 2), isTrue);
-    expect(p.shouldRetry(null, 3), isFalse);
+    expect(p.shouldRetry(503, 1), isTrue);
+    expect(p.shouldRetry(503, 2), isTrue);
+    expect(p.shouldRetry(503, 3), isFalse);
     expect(p.shouldRetry(422, 1), isFalse);
+  });
+
+  test('no answer from the server (offline) is retried without limit', () {
+    const p = BackoffPolicy(maxAttempts: 3);
+    expect(p.shouldRetry(null, 3), isTrue);
+    expect(p.shouldRetry(null, 500), isTrue);
+    // The wait between tries stays capped, so an offline phone asks about once every five minutes.
+    expect(p.delayFor(500), const Duration(minutes: 5));
   });
 }

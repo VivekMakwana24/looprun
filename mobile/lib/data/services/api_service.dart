@@ -6,6 +6,9 @@ import '../upload/upload_queue.dart';
 
 /// Every call to the Looprun server (docs/CONTRACT.openapi.yaml). Stateless apart from the token lookup;
 /// repositories decide what to keep. Tests use a fake implementation.
+/// Text of an [ApiException] without a status code (no answer from the server).
+const String networkErrorMessage = "Can't reach the server. Check your connection.";
+
 abstract class ApiService implements RunsApi {
   Future<Session> authGoogle(String idToken);
 
@@ -16,8 +19,11 @@ abstract class ApiService implements RunsApi {
 
   Future<void> putHomeZones(List<HomeZone> zones);
 
-  /// Returns freeze_until (epoch ms) or null when no freeze is active.
-  Future<int?> setFreeze(int days);
+  /// Starts (days > 0) or ends (0) a decay freeze. A 409 means the quota would be exceeded.
+  Future<FreezeStatus> setFreeze(int days);
+
+  /// The caller's own settings: name, home zones, freeze state and quota (D10).
+  Future<MeInfo> getMe();
 
   Future<void> deleteAccount();
 
@@ -73,7 +79,8 @@ class DioApiService implements ApiService {
   String _messageOf(DioException e) {
     final data = e.response?.data;
     if (data is Map && data['detail'] is String) return data['detail'] as String;
-    return e.message ?? 'Network error';
+    if (e.response == null) return networkErrorMessage;
+    return 'The server answered with an error (${e.response?.statusCode}).';
   }
 
   Map<String, dynamic> _map(Object? data) => (data as Map).cast<String, dynamic>();
@@ -115,10 +122,15 @@ class DioApiService implements ApiService {
       });
 
   @override
-  Future<int?> setFreeze(int days) => _guard(() async {
+  Future<FreezeStatus> setFreeze(int days) => _guard(() async {
         final res = await _dio.post('/me/freeze', data: {'days': days});
-        final v = _map(res.data)['freeze_until'];
-        return v is num ? v.toInt() : null;
+        return FreezeStatus.fromJson(_map(res.data));
+      });
+
+  @override
+  Future<MeInfo> getMe() => _guard(() async {
+        final res = await _dio.get('/me');
+        return MeInfo.fromJson(_map(res.data));
       });
 
   @override

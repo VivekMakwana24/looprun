@@ -103,6 +103,17 @@ class ProfileRepository {
     return next;
   }
 
+  /// Removes the zone at [index] (0-based, in the order shown) and uploads the remaining list.
+  Future<List<HomeZone>> removeZoneAt(int index) async {
+    if (_zonesKey() == null) throw const AppException('Sign in to change your home zones.');
+    final current = homeZones();
+    if (index < 0 || index >= current.length) return current;
+    final next = [...current]..removeAt(index);
+    await _api.putHomeZones(next);
+    await _saveZones(next);
+    return next;
+  }
+
   Future<List<HomeZone>> clearZones() async {
     if (_zonesKey() == null) throw const AppException('Sign in to change your home zones.');
     await _api.putHomeZones(const []);
@@ -110,10 +121,23 @@ class ProfileRepository {
     return const [];
   }
 
-  // ------------------------------------------------------------------ freeze, deletion
+  // ------------------------------------------------------------------ server settings, freeze, deletion
 
-  /// Starts (days > 0) or ends (0) a decay freeze. Returns freeze_until in epoch ms, or null.
-  Future<int?> setFreeze(int days) => _api.setFreeze(days);
+  /// Reads the caller's settings from the server (GET /me). The server's list of home zones replaces the
+  /// copy on this phone, so zones set on another phone (or lost with a reinstall) show up here.
+  Future<MeInfo> loadMe() async {
+    final uid = _currentUserId();
+    final me = await _api.getMe();
+    // Only keep it when the same account is still signed in and it is the account the answer is about.
+    if (uid != null && uid.isNotEmpty && _currentUserId() == uid && (me.user.id.isEmpty || me.user.id == uid)) {
+      await _saveZones(me.homeZones);
+    }
+    return me;
+  }
+
+  /// Starts (days > 0) or ends (0) the decay freeze ("rest days"). Throws ApiException 409 when the
+  /// quota would be exceeded; nothing changes then.
+  Future<FreezeStatus> setFreeze(int days) => _api.setFreeze(days);
 
   /// Deletes the account on the server, then the runs and zones on this phone.
   /// The caller signs out afterwards.

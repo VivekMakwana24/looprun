@@ -32,19 +32,52 @@ class MapState {
   const MapState({
     this.cells = const [],
     this.notice = zoomInNotice,
+    this.loading = false,
+    this.loadFailed = false,
+    this.offline = false,
   });
 
   static const String zoomInNotice = 'Zoom in to see claimed cells';
+  static const String emptyNotice = 'No claimed cells here yet. Be the first.';
 
   final List<Cell> cells;
 
-  /// Text for the bottom card, or null.
+  /// Text about the map itself (zoomed out, nothing here, load failed), or null.
   final String? notice;
 
-  MapState copyWith({List<Cell>? cells, String? notice, bool clearNotice = false}) {
+  /// The first load of the visible area is running.
+  final bool loading;
+
+  /// The last load failed; [notice] says why and the screen offers "Try again".
+  final bool loadFailed;
+
+  /// The last load got no answer from the server at all.
+  final bool offline;
+
+  /// Own cells in view that have lost more than half of their hold. The server sends the strength
+  /// only for the caller's own cells; nothing is estimated on the phone.
+  int get fadingCount {
+    var n = 0;
+    for (final c in cells) {
+      if (c.isFading) n++;
+    }
+    return n;
+  }
+
+  MapState copyWith({
+    List<Cell>? cells,
+    String? notice,
+    bool clearNotice = false,
+    bool? loading,
+    bool? loadFailed,
+    bool? offline,
+  }) {
     return MapState(
       cells: cells ?? this.cells,
       notice: clearNotice ? null : (notice ?? this.notice),
+      loading: loading ?? this.loading,
+      loadFailed: loadFailed ?? this.loadFailed,
+      offline: offline ?? this.offline,
     );
   }
 }
@@ -63,6 +96,7 @@ class MapViewModel extends AutoDisposeNotifier<MapState> {
   bool _loading = false;
   bool _alive = true;
   _Area? _queued;
+  _Area? _lastArea;
 
   CellRepository get _cells => ref.read(cellRepositoryProvider);
 
@@ -83,6 +117,7 @@ class MapViewModel extends AutoDisposeNotifier<MapState> {
   /// The camera is zoomed out too far: no cells, no socket.
   void onZoomedOut() {
     _queued = null;
+    _lastArea = null;
     _cells.stopLive();
     _cells.clear();
     state = const MapState();
@@ -116,19 +151,35 @@ class MapViewModel extends AutoDisposeNotifier<MapState> {
   }
 
   Future<void> _load(_Area a) async {
+    _lastArea = a;
+    if (_alive && state.cells.isEmpty) state = state.copyWith(loading: true);
     try {
       final bbox = computeBbox(south: a.south, west: a.west, north: a.north, east: a.east);
       final cells = await _cells.loadArea(bbox);
       if (!_alive) return;
       _cells.startLive(bbox);
       state = cells.isEmpty
-          ? state.copyWith(notice: 'No claimed cells here yet. Be the first.')
-          : state.copyWith(clearNotice: true);
+          ? state.copyWith(notice: MapState.emptyNotice, loading: false, loadFailed: false, offline: false)
+          : state.copyWith(clearNotice: true, loading: false, loadFailed: false, offline: false);
     } on ApiException catch (e) {
-      if (_alive) state = state.copyWith(notice: 'Could not load cells: ${e.message}');
+      if (_alive) {
+        state = state.copyWith(
+          notice: e.isNetwork ? 'Could not load cells. ${e.message}' : 'Could not load cells: ${e.message}',
+          loading: false,
+          loadFailed: true,
+          offline: e.isNetwork,
+        );
+      }
     } catch (_) {
-      if (_alive) state = state.copyWith(notice: 'Could not load cells');
+      if (_alive) state = state.copyWith(notice: 'Could not load cells', loading: false, loadFailed: true);
     }
+  }
+
+  /// "Try again" after a failed load: asks for the same area once more.
+  Future<void> retry() async {
+    final a = _lastArea;
+    if (a == null) return;
+    await onCameraIdle(south: a.south, west: a.west, north: a.north, east: a.east);
   }
 
   /// The claimed cell near a tapped point, or null.

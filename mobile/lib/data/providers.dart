@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,9 +15,11 @@ import 'repositories/cell_repository.dart';
 import 'repositories/location_repository.dart';
 import 'repositories/profile_repository.dart';
 import 'repositories/run_repository.dart';
+import 'repositories/theme_repository.dart';
 import 'services/api_service.dart';
 import 'services/foreground_service.dart';
 import 'services/google_auth_service.dart';
+import 'services/link_service.dart';
 import 'services/live_service.dart';
 import 'services/location_service.dart';
 import 'services/permission_service.dart';
@@ -35,8 +38,18 @@ final preferencesProvider = Provider<SharedPreferences>(
 
 final tokenStoreProvider = Provider<TokenStore>((ref) => SecureTokenStore());
 
-/// True only when built with --dart-define=DEV_AUTH=true. Tests override it.
+/// Whether the dev login exists in this build: on in debug builds, never in release (see [AppConfig.devAuth]).
+/// Tests override it.
 final devAuthEnabledProvider = Provider<bool>((ref) => AppConfig.devAuth);
+
+/// The server address, shown next to "can't reach the server" in debug builds only (it tells a developer
+/// at once that the app points at the wrong machine). Null in release builds. Tests override it.
+final apiBaseUrlHintProvider = Provider<String?>((ref) => kDebugMode ? AppConfig.apiBaseUrl : null);
+
+/// Address of the Privacy Policy (build setting PRIVACY_POLICY_URL). Tests override it.
+final privacyPolicyUrlProvider = Provider<String>((ref) => AppConfig.privacyPolicyUrl);
+
+final linkServiceProvider = Provider<LinkService>((ref) => UrlLauncherLinkService());
 
 final googleAuthServiceProvider =
     Provider<GoogleAuthService>((ref) => PluginGoogleAuthService());
@@ -148,6 +161,10 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
     permissions: ref.watch(permissionServiceProvider),
     currentUserId: () => _currentUserId(ref),
   );
+});
+
+final themeRepositoryProvider = Provider<ThemeRepository>((ref) {
+  return ThemeRepository(prefs: ref.watch(preferencesProvider));
 });
 
 final locationRepositoryProvider = Provider<LocationRepository>((ref) {

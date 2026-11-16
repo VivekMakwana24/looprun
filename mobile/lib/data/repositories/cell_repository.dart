@@ -14,6 +14,7 @@ class CellRepository {
     required LiveService live,
     required String? Function() tokenProvider,
     this.reconnectPolicy = const BackoffPolicy(base: Duration(seconds: 3), max: Duration(minutes: 2)),
+    this.maxReconnects = 8,
   })  : _api = api,
         _live = live,
         _tokenProvider = tokenProvider;
@@ -22,6 +23,14 @@ class CellRepository {
   final LiveService _live;
   final String? Function() _tokenProvider;
   final BackoffPolicy reconnectPolicy;
+
+  /// Consecutive failed connections after which the socket is left closed until the map asks again
+  /// (the next camera stop). A refused handshake (403: bad box, too many sockets) would otherwise be
+  /// retried for ever (review F14).
+  final int maxReconnects;
+
+  /// The token the server refused with 4401. Nothing connects with it again (review F16).
+  String? _refusedToken;
 
   final Map<String, Cell> _cells = {};
   final StreamController<List<Cell>> _updates = StreamController<List<Cell>>.broadcast();
@@ -91,6 +100,9 @@ class CellRepository {
   void startLive(String bbox) {
     if (_disposed) return;
     if (_liveBbox == bbox && (_liveSub != null || _reconnectTimer != null)) return;
+    final refused = _refusedToken;
+    if (refused != null && refused == _tokenProvider()) return;
+    _refusedToken = null;
     _liveBbox = bbox;
     _reconnectFailures = 0;
     _connect();
@@ -126,6 +138,7 @@ class CellRepository {
         if (error is LiveClosedException && error.isAuthFailure) {
           // The token is no good; retrying would not help. A REST call will notice the 401.
           _liveBbox = null;
+          _refusedToken = token;
           return;
         }
         _scheduleReconnect();
@@ -158,6 +171,7 @@ class CellRepository {
   void _scheduleReconnect() {
     if (_disposed || _liveBbox == null) return;
     _reconnectFailures++;
+    if (_reconnectFailures > maxReconnects) return; // startLive() from the next camera stop tries again
     final delay = reconnectPolicy.delayFor(_reconnectFailures);
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(delay, () => _connect(resync: true));

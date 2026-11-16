@@ -3,10 +3,40 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:looprun/data/repositories/run_repository.dart';
 import 'package:looprun/data/services/foreground_service.dart';
+import 'package:looprun/data/services/location_service.dart';
 import 'package:looprun/data/upload/upload_queue.dart';
 import 'package:looprun/domain/recorder/run_recorder.dart';
 
 import '../fakes/fakes.dart';
+
+/// A GPS source whose stream can end (like the platform stream does when location is switched off)
+/// and be opened again.
+class RestartableLocationService implements LocationService {
+  StreamController<GeoFix>? _current;
+  int opened = 0;
+
+  /// When true every stream ends as soon as it is listened to.
+  bool endAtOnce = false;
+
+  @override
+  Future<bool> isEnabled() async => true;
+
+  @override
+  Future<GeoFix> currentPosition() async => const GeoFix(lat: 50, lng: 8.7, t: 1, acc: 5);
+
+  @override
+  Stream<GeoFix> fixes() {
+    opened++;
+    final c = StreamController<GeoFix>();
+    _current = c;
+    if (endAtOnce) unawaited(c.close());
+    return c.stream;
+  }
+
+  void emit(GeoFix fix) => _current!.add(fix);
+
+  Future<void> endStream() => _current!.close();
+}
 
 void main() {
   late MemoryStore store;
@@ -171,7 +201,8 @@ void main() {
     await repo.start();
     location.controller.addError(StateError('provider disabled'));
     await settle();
-    expect(repo.current.error, contains('GPS error'));
+    expect(repo.current.error, gpsErrorMessage);
+    expect(repo.current.error, isNot(contains('provider disabled')), reason: 'never the raw exception');
     expect(repo.current.status, RecorderStatus.recording);
     await repo.stop();
   });
@@ -287,5 +318,96 @@ void main() {
     await repo.retryUpload('r');
     expect(api.uploadedIds, ['r']);
     expect(store.jobs['r']!.stage, UploadStage.done);
+  });
+
+  test('a GPS stream that ends is opened again and recording goes on', () async {
+    final own = RestartableLocationService();
+    repo = RunRepository(
+      store: store,
+      location: own,
+      permissions: permissions,
+      foreground: foreground,
+      uploads: UploadQueue(store: store, api: api, nowMs: () => now),
+      api: api,
+      nowMs: () => now,
+      newId: () => 'run-${++ids}',
+      tickInterval: const Duration(milliseconds: 20),
+      gpsRestartDelay: const Duration(milliseconds: 10),
+    );
+    await repo.start();
+    expect(own.opened, 1);
+    own.emit(fix(50.0, 8.7, t: 1));
+    await settle();
+    await own.endStream();
+    await settle(40);
+    expect(own.opened, 2, reason: 'the stream was opened a second time');
+    expect(repo.current.error, gpsStoppedMessage);
+    own.emit(fix(50.001, 8.7, t: 2));
+    await settle();
+    expect(repo.current.error, isNull, reason: 'the warning goes away when points arrive again');
+    expect((await store.fixesFor('run-1')).length, 2);
+    await repo.stop();
+    expect(repo.current.status, RecorderStatus.finished);
+  });
+
+  test('a GPS stream that keeps ending is given up after maxGpsRestarts, the run stays alive', () async {
+    final own = RestartableLocationService()..endAtOnce = true;
+    repo = RunRepository(
+      store: store,
+      location: own,
+      permissions: permissions,
+      foreground: foreground,
+      uploads: UploadQueue(store: store, api: api, nowMs: () => now),
+      api: api,
+      nowMs: () => now,
+      newId: () => 'run-${++ids}',
+      tickInterval: const Duration(milliseconds: 20),
+      gpsRestartDelay: const Duration(milliseconds: 2),
+      maxGpsRestarts: 3,
+    );
+    await repo.start();
+    await settle(80);
+    expect(own.opened, 4, reason: 'the first stream plus three restarts');
+    expect(repo.current.error, gpsGaveUpMessage);
+    expect(repo.current.status, RecorderStatus.recording);
+    await repo.stop();
+  });
+
+  test('the notification says Paused while paused and Recording again after resume (review F3)', () async {
+    await repo.start();
+    await repo.pause();
+    await settle();
+    expect(foreground.texts.last, pausedNotificationText);
+    await repo.resume();
+    await settle();
+    expect(foreground.texts.last, isNot(pausedNotificationText));
+    await repo.stop();
+  });
+
+  test('with notifications switched off the runner is told, and the run still records (review F4)', () async {
+    permissions.notifications = false;
+    await repo.start();
+    expect(repo.current.status, RecorderStatus.recording);
+    expect(repo.current.notice, notificationsOffNotice);
+    await repo.stop();
+  });
+
+  test('the accuracy of the newest fix is published', () async {
+    await repo.start();
+    expect(repo.current.accuracyM, isNull);
+    location.emit(fix(50.0, 8.7, t: 1, acc: 6));
+    await settle();
+    expect(repo.current.accuracyM, 6);
+    await repo.stop();
+  });
+
+  test('a start that follows a recovery check waits for it (review F5)', () async {
+    final check = repo.findUnfinishedRun();
+    final started = repo.start();
+    expect(await check, isNull);
+    await started;
+    expect(repo.current.status, RecorderStatus.recording);
+    expect(foreground.stops, 0, reason: 'the recovery check must not stop the new run\'s service');
+    await repo.stop();
   });
 }

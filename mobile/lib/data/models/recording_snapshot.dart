@@ -11,7 +11,9 @@ class RecordingSnapshot {
     this.distanceM = 0,
     this.health = GpsHealth.inactive,
     this.path = const [],
+    this.accuracyM,
     this.error,
+    this.notice,
     this.finishedRunId,
   });
 
@@ -21,7 +23,13 @@ class RecordingSnapshot {
   final double distanceM;
   final GpsHealth health;
   final List<PathPoint> path;
+
+  /// Horizontal accuracy of the latest fix in metres, or null before the first fix.
+  final double? accuracyM;
   final String? error;
+
+  /// Something the runner should know that is not a failure (for example: notifications are off).
+  final String? notice;
 
   /// Set when a run was finished and saved, until the screen calls `acknowledge()`.
   final String? finishedRunId;
@@ -35,7 +43,9 @@ class RecordingSnapshot {
     double? distanceM,
     GpsHealth? health,
     List<PathPoint>? path,
+    double? accuracyM,
     String? error,
+    String? notice,
     bool clearError = false,
     String? finishedRunId,
   }) {
@@ -46,7 +56,9 @@ class RecordingSnapshot {
       distanceM: distanceM ?? this.distanceM,
       health: health ?? this.health,
       path: path ?? this.path,
+      accuracyM: accuracyM ?? this.accuracyM,
       error: clearError ? null : (error ?? this.error),
+      notice: notice ?? this.notice,
       finishedRunId: finishedRunId ?? this.finishedRunId,
     );
   }

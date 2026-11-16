@@ -21,6 +21,34 @@ class AuthState {
   final String? error;
 }
 
+const String signInNoServerText = "Can't reach the server. Check your connection.";
+
+/// A sentence for the user for anything that can go wrong while signing in. Never the raw exception:
+/// platform and network errors are long, technical and sometimes contain addresses.
+/// [apiBaseUrl] is only passed in debug builds; it is added to the "can't reach the server" text so a
+/// developer sees which machine the app is talking to.
+String signInErrorText(Object error, {String? apiBaseUrl, bool dev = false}) {
+  if (error is AppException) return error.message;
+  if (error is ApiException) {
+    if (error.isNetwork) {
+      return apiBaseUrl == null ? signInNoServerText : '$signInNoServerText\nServer: $apiBaseUrl';
+    }
+    switch (error.statusCode) {
+      case 401:
+        return dev
+            ? 'The dev login is switched off on this server.'
+            : 'The server did not accept this Google account. Please try again.';
+      case 503:
+        return 'Google sign-in is not set up on the server yet.';
+      case 429:
+        return 'Too many attempts. Wait a minute and try again.';
+      default:
+        return 'Sign-in did not work (server error ${error.statusCode}). Please try again.';
+    }
+  }
+  return 'Sign-in did not work. Please try again.';
+}
+
 /// View model of the sign-in screen and the source of "who is signed in" for the router.
 class AuthViewModel extends Notifier<AuthState> {
   @override
@@ -51,16 +79,16 @@ class AuthViewModel extends Notifier<AuthState> {
     try {
       final session = await ref.read(authRepositoryProvider).signInWithGoogle();
       if (session == null) {
+        // The user closed the Google dialog: not an error, say nothing.
         state = const AuthState(status: AuthStatus.signedOut);
       } else {
         state = AuthState(status: AuthStatus.signedIn, user: session.user);
       }
-    } on ApiException catch (e) {
-      state = AuthState(status: AuthStatus.signedOut, error: 'Sign-in failed: ${e.message}');
-    } on AppException catch (e) {
-      state = AuthState(status: AuthStatus.signedOut, error: e.message);
     } catch (e) {
-      state = AuthState(status: AuthStatus.signedOut, error: 'Sign-in failed: $e');
+      state = AuthState(
+        status: AuthStatus.signedOut,
+        error: signInErrorText(e, apiBaseUrl: ref.read(apiBaseUrlHintProvider)),
+      );
     }
   }
 
@@ -71,10 +99,11 @@ class AuthViewModel extends Notifier<AuthState> {
     try {
       final session = await ref.read(authRepositoryProvider).signInDev(name);
       state = AuthState(status: AuthStatus.signedIn, user: session.user);
-    } on ApiException catch (e) {
-      state = AuthState(status: AuthStatus.signedOut, error: 'Dev sign-in failed: ${e.message}');
     } catch (e) {
-      state = AuthState(status: AuthStatus.signedOut, error: 'Dev sign-in failed: $e');
+      state = AuthState(
+        status: AuthStatus.signedOut,
+        error: signInErrorText(e, apiBaseUrl: ref.read(apiBaseUrlHintProvider), dev: true),
+      );
     }
   }
 

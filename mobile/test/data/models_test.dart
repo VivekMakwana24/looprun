@@ -73,6 +73,82 @@ void main() {
     expect(hidden.hidden, isTrue);
   });
 
+  test('Cell parses the hexagon boundary and the strength of an own cell (D10)', () {
+    final mine = Cell.fromJson({
+      'id': 'a',
+      'lat': 50.0,
+      'lng': 8.7,
+      'boundary': [
+        [50.001, 8.7], [50.0005, 8.701], [49.9995, 8.701], [49.999, 8.7], [49.9995, 8.699], [50.0005, 8.699],
+      ],
+      'owner': {'id': 'u1', 'name': 'Ann'},
+      'mine': true,
+      'strength': 0.3,
+    });
+    expect(mine.boundary.length, 6);
+    expect(mine.boundary.first, const LatLngPoint(50.001, 8.7));
+    expect(mine.strength, 0.3);
+    expect(mine.isFading, isTrue);
+
+    final strong = Cell.fromJson({'id': 'b', 'mine': true, 'strength': 0.5});
+    expect(strong.isFading, isFalse);
+    expect(strong.boundary, isEmpty);
+
+    // Strength is never taken for somebody else's cell, whatever arrives.
+    final other = Cell.fromJson({
+      'id': 'c',
+      'owner': {'id': 'u2', 'name': 'Bob'},
+      'mine': false,
+      'strength': 0.1,
+    });
+    expect(other.strength, isNull);
+    expect(other.isFading, isFalse);
+
+    // A malformed boundary is dropped (the map then draws a circle).
+    expect(Cell.fromJson({'id': 'd', 'boundary': [[1, 2], [3]]}).boundary, isEmpty);
+    expect(Cell.fromJson({'id': 'e', 'boundary': 'x'}).boundary, isEmpty);
+    expect(Cell.fromJson({'id': 'f', 'mine': true}).strength, isNull);
+    expect(Cell.fromJson({'id': 'g', 'mine': true, 'strength': 7}).strength, 1.0);
+  });
+
+  test('Leaderboard parses me, with and without a rank (D10)', () {
+    final b = Leaderboard.fromJson({
+      'week': '2026-W47',
+      'entries': <Object>[],
+      'me': {'rank': 4, 'cells': 128},
+    });
+    expect(b.me, const LeaderboardMe(rank: 4, cells: 128));
+    final none = Leaderboard.fromJson({
+      'week': '2026-W47',
+      'entries': <Object>[],
+      'me': {'rank': null, 'cells': 0},
+    });
+    expect(none.me!.rank, isNull);
+    expect(none.me!.cells, 0);
+    expect(Leaderboard.fromJson({'week': 'x', 'entries': <Object>[]}).me, isNull);
+  });
+
+  test('MeInfo and FreezeStatus parse GET /me (D10)', () {
+    final me = MeInfo.fromJson({
+      'user': {'id': 'u1', 'name': 'Ann'},
+      'home_zones': [
+        {'lat': 1.0, 'lng': 2.0, 'radius_m': 300}
+      ],
+      'freeze': {'freeze_until': null, 'used_days': 12, 'quota_days': 30, 'window_days': 90},
+    });
+    expect(me.user.name, 'Ann');
+    expect(me.homeZones.single.radiusM, 300);
+    expect(me.freeze.freezeUntil, isNull);
+    expect(me.freeze.usedDays, 12);
+    expect(me.freeze.quotaDays, 30);
+    expect(me.freeze.windowDays, 90);
+    expect(me.freeze.hasQuota, isTrue);
+    // An older server answers POST /me/freeze with freeze_until only.
+    final old = FreezeStatus.fromJson({'freeze_until': 99});
+    expect(old.freezeUntil, 99);
+    expect(old.hasQuota, isFalse);
+  });
+
   test('Session parses token and user', () {
     final s = Session.fromJson({
       'access_token': 't0k',
@@ -123,6 +199,16 @@ void main() {
     expect(formatDistance(1234), '1.23 km');
     expect(formatDuration(65000), '01:05');
     expect(formatDuration(3725000), '1:02:05');
+    expect(formatKm(3420), '3.42');
+    expect(formatPace(370000, 1000), '6:10');
+    expect(formatPace(10000, 20), noValue, reason: 'too short to say');
+    expect(formatPace(0, 1000), noValue);
+    expect(formatPace(7200000, 100), noValue, reason: 'standing around is not a pace');
+    expect(formatWeekLabel('2026-W47'), 'WEEK 47');
+    expect(formatWeekLabel('2026-W05'), 'WEEK 5');
+    expect(formatWeekLabel('soon'), isNull);
+    expect(formatRunDate(DateTime(2026, 11, 16, 6, 42)), 'Mon 16 Nov, 06:42');
+    expect(formatDayMonth(DateTime(2026, 1, 3)), '3 Jan');
   });
 }
 
@@ -152,6 +238,22 @@ void liveFrameTests() {
       'mine': false,
     });
     expect(c!.toCell().hidden, isTrue);
+    final own = CellChange.tryParse({
+      'type': 'cell_changed',
+      'cell': 'y',
+      'lat': 1,
+      'lng': 2,
+      'boundary': [
+        [1.0, 2.0], [1.1, 2.0], [1.1, 2.1],
+      ],
+      'owner': {'id': 'u1', 'name': 'Ann'},
+      'mine': true,
+      'strength': 0.25,
+    })!;
+    expect(own.toCell().boundary.length, 3);
+    expect(own.toCell().strength, 0.25);
+    expect(own.toCell().isFading, isTrue);
+    expect(own.toCell().hidden, isFalse);
     expect(CellChange.tryParse({'type': 'ping'}), isNull);
     expect(CellChange.tryParse('nope'), isNull);
     expect(CellChange.tryParse({'type': 'cell_changed', 'cell': 'x'}), isNull);

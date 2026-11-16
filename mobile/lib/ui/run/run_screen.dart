@@ -135,7 +135,7 @@ class GpsHealthChip extends StatelessWidget {
         color = healthWarn;
       case GpsHealth.inactive:
         label = 'GPS idle';
-        color = Colors.grey;
+        color = healthWarn;
     }
     return Chip(
       key: const Key('gps_health_chip'),

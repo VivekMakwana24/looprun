@@ -9,6 +9,10 @@ abstract class PermissionService {
   /// Prompts for foreground location (and notifications) if needed. Returns true when location is granted.
   /// Must only be called after the disclosure screen was accepted.
   Future<bool> requestLocation();
+
+  /// Whether Looprun may show notifications (Android 13+ asks). Never prompts. The recording
+  /// notification and its Stop button only appear when this is true.
+  Future<bool> notificationsAllowed();
 }
 
 class DevicePermissionService implements PermissionService {
@@ -33,5 +37,14 @@ class DevicePermissionService implements PermissionService {
       }
     }
     return granted;
+  }
+
+  @override
+  Future<bool> notificationsAllowed() async {
+    try {
+      return await FlutterForegroundTask.checkNotificationPermission() == NotificationPermission.granted;
+    } catch (_) {
+      return true; // unknown: do not warn about something we could not check
+    }
   }
 }

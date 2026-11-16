@@ -155,33 +155,82 @@ class RunStatus {
       };
 }
 
+/// One corner of a cell's hexagon.
+class LatLngPoint {
+  const LatLngPoint(this.lat, this.lng);
+  final double lat;
+  final double lng;
+
+  @override
+  bool operator ==(Object other) => other is LatLngPoint && other.lat == lat && other.lng == lng;
+
+  @override
+  int get hashCode => Object.hash(lat, lng);
+}
+
+/// Parses `[[lat, lng], ...]` (contract D10). Anything malformed gives an empty list, and the map then
+/// falls back to a circle at the cell centre.
+List<LatLngPoint> _boundary(Object? v) {
+  if (v is! List || v.length < 3) return const [];
+  final out = <LatLngPoint>[];
+  for (final e in v) {
+    if (e is! List || e.length < 2) return const [];
+    final lat = _d(e[0]);
+    final lng = _d(e[1]);
+    if (lat == null || lng == null) return const [];
+    out.add(LatLngPoint(lat, lng));
+  }
+  return out;
+}
+
 class Cell {
   const Cell({
     required this.id,
     this.lat,
     this.lng,
+    this.boundary = const [],
     this.owner,
     this.mine = false,
     this.hidden = false,
+    this.strength,
   });
   final String id;
 
   /// Cell centre, computed by the server (decision D7).
   final double? lat;
   final double? lng;
+
+  /// The hexagon corners in ring order, not closed (decision D10). Empty when the server did not send them.
+  final List<LatLngPoint> boundary;
   final UserRef? owner;
   final bool mine;
   final bool hidden;
 
+  /// 0..1, only for the caller's own cells (D10): how much of the hold is left. Null for everybody else.
+  final double? strength;
+
+  /// Below this an own cell is drawn as "fading".
+  static const double fadingBelow = 0.5;
+
+  /// True for an own cell that has lost more than half of its hold.
+  bool get isFading {
+    final s = strength;
+    return mine && s != null && s < fadingBelow;
+  }
+
   factory Cell.fromJson(Map<String, dynamic> j) {
     final o = j['owner'];
+    final mine = j['mine'] == true;
+    final s = _d(j['strength']);
     return Cell(
       id: (j['id'] ?? '').toString(),
       lat: _d(j['lat']),
       lng: _d(j['lng']),
+      boundary: _boundary(j['boundary']),
       owner: o is Map ? UserRef.fromJson(o.cast<String, dynamic>()) : null,
-      mine: j['mine'] == true,
+      mine: mine,
       hidden: j['hidden'] == true,
+      strength: mine && s != null ? s.clamp(0.0, 1.0).toDouble() : null,
     );
   }
 }
@@ -199,17 +248,92 @@ class LeaderboardEntry {
       );
 }
 
+/// The caller's own place on the weekly board (D10). [rank] is null when the caller holds no cells.
+class LeaderboardMe {
+  const LeaderboardMe({this.rank, this.cells = 0});
+  final int? rank;
+  final int cells;
+
+  factory LeaderboardMe.fromJson(Map<String, dynamic> j) =>
+      LeaderboardMe(rank: _i(j['rank']), cells: _i(j['cells']) ?? 0);
+
+  @override
+  bool operator ==(Object other) => other is LeaderboardMe && other.rank == rank && other.cells == cells;
+
+  @override
+  int get hashCode => Object.hash(rank, cells);
+}
+
 class Leaderboard {
-  const Leaderboard({required this.week, required this.entries});
+  const Leaderboard({required this.week, required this.entries, this.me});
   final String week;
   final List<LeaderboardEntry> entries;
 
-  factory Leaderboard.fromJson(Map<String, dynamic> j) => Leaderboard(
-        week: (j['week'] ?? '').toString(),
-        entries: ((j['entries'] as List?) ?? const [])
-            .map((e) => LeaderboardEntry.fromJson((e as Map).cast<String, dynamic>()))
-            .toList(),
+  /// Null when the server did not send it (older server).
+  final LeaderboardMe? me;
+
+  factory Leaderboard.fromJson(Map<String, dynamic> j) {
+    final me = j['me'];
+    return Leaderboard(
+      week: (j['week'] ?? '').toString(),
+      entries: ((j['entries'] as List?) ?? const [])
+          .map((e) => LeaderboardEntry.fromJson((e as Map).cast<String, dynamic>()))
+          .toList(),
+      me: me is Map ? LeaderboardMe.fromJson(me.cast<String, dynamic>()) : null,
+    );
+  }
+}
+
+/// State of the decay freeze ("rest days") and how much of the quota is used (D10).
+class FreezeStatus {
+  const FreezeStatus({this.freezeUntil, this.usedDays, this.quotaDays, this.windowDays});
+
+  /// Epoch ms; null when no freeze is running.
+  final int? freezeUntil;
+
+  /// Null when the server did not send the quota fields (older server).
+  final int? usedDays;
+  final int? quotaDays;
+  final int? windowDays;
+
+  bool get hasQuota => usedDays != null && quotaDays != null && quotaDays! > 0;
+
+  factory FreezeStatus.fromJson(Map<String, dynamic> j) => FreezeStatus(
+        freezeUntil: _i(j['freeze_until']),
+        usedDays: _i(j['used_days']),
+        quotaDays: _i(j['quota_days']),
+        windowDays: _i(j['window_days']),
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is FreezeStatus &&
+      other.freezeUntil == freezeUntil &&
+      other.usedDays == usedDays &&
+      other.quotaDays == quotaDays &&
+      other.windowDays == windowDays;
+
+  @override
+  int get hashCode => Object.hash(freezeUntil, usedDays, quotaDays, windowDays);
+}
+
+/// GET /me: the caller's own settings as the server has them.
+class MeInfo {
+  const MeInfo({required this.user, this.homeZones = const [], this.freeze = const FreezeStatus()});
+  final UserRef user;
+  final List<HomeZone> homeZones;
+  final FreezeStatus freeze;
+
+  factory MeInfo.fromJson(Map<String, dynamic> j) {
+    final f = j['freeze'];
+    return MeInfo(
+      user: UserRef.fromJson(((j['user'] as Map?) ?? const {}).cast<String, dynamic>()),
+      homeZones: ((j['home_zones'] as List?) ?? const [])
+          .map((e) => HomeZone.fromJson((e as Map).cast<String, dynamic>()))
+          .toList(),
+      freeze: f is Map ? FreezeStatus.fromJson(f.cast<String, dynamic>()) : const FreezeStatus(),
+    );
+  }
 }
 
 class HomeZone {
@@ -301,6 +425,8 @@ class CellChange {
     required this.lng,
     required this.owner,
     required this.mine,
+    this.boundary = const [],
+    this.strength,
   });
 
   final String id;
@@ -310,6 +436,12 @@ class CellChange {
   /// Null when the cell has no visible owner: it is free, or its owner is hidden by privacy rules.
   final UserRef? owner;
   final bool mine;
+
+  /// Hexagon corners (D10); empty when the server did not send them.
+  final List<LatLngPoint> boundary;
+
+  /// Only on frames about the receiver's own cell (D10).
+  final double? strength;
 
   /// Returns null if the frame is not a well-formed cell_changed message.
   static CellChange? tryParse(Object? decoded) {
@@ -321,17 +453,29 @@ class CellChange {
     final lng = _d(j['lng']);
     if (id is! String || lat == null || lng == null) return null;
     final o = j['owner'];
+    final mine = j['mine'] == true;
+    final s = _d(j['strength']);
     return CellChange(
       id: id,
       lat: lat,
       lng: lng,
       owner: o is Map ? UserRef.fromJson(o.cast<String, dynamic>()) : null,
-      mine: j['mine'] == true,
+      mine: mine,
+      boundary: _boundary(j['boundary']),
+      strength: mine && s != null ? s.clamp(0.0, 1.0).toDouble() : null,
     );
   }
 
   /// The server never sends a hidden cell's owner, so a change without owner is drawn as private
-  /// (grey) until the next REST refresh shows whether the cell is free.
-  Cell toCell() =>
-      Cell(id: id, lat: lat, lng: lng, owner: owner, mine: mine, hidden: owner == null);
+  /// until the next REST refresh shows whether the cell is free.
+  Cell toCell() => Cell(
+        id: id,
+        lat: lat,
+        lng: lng,
+        boundary: boundary,
+        owner: owner,
+        mine: mine,
+        hidden: owner == null && !mine,
+        strength: strength,
+      );
 }

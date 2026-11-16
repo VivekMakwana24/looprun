@@ -4,6 +4,26 @@ import 'backoff.dart';
 
 enum UploadStage { queued, processing, done, failed }
 
+/// The server refuses more than this many fixes in one run (contract: 413).
+const int maxFixesPerUpload = 20000;
+
+/// Thins a very long run (over [max] fixes, about 5.5 hours at one fix per second) so it can be uploaded
+/// instead of failing for good with 413 (review F10). Keeps the first and the last fix and an evenly
+/// spaced selection in between; the order is unchanged. Shorter lists are returned as they are.
+List<Fix> thinFixes(List<Fix> fixes, {int max = maxFixesPerUpload}) {
+  if (max < 2 || fixes.length <= max) return fixes;
+  final out = <Fix>[];
+  final step = (fixes.length - 1) / (max - 1);
+  var lastIndex = -1;
+  for (var k = 0; k < max; k++) {
+    final i = k == max - 1 ? fixes.length - 1 : (k * step).floor();
+    if (i == lastIndex) continue;
+    out.add(fixes[i]);
+    lastIndex = i;
+  }
+  return out;
+}
+
 class UploadJob {
   const UploadJob({
     required this.runId,
@@ -124,7 +144,16 @@ class UploadQueue {
     try {
       final RunStatus status;
       if (job.stage == UploadStage.queued) {
-        final payload = await store.buildPayload(job.runId);
+        final built = await store.buildPayload(job.runId);
+        final payload = built.fixes.length > maxFixesPerUpload
+            ? RunUpload(
+                id: built.id,
+                startedAt: built.startedAt,
+                endedAt: built.endedAt,
+                integrityToken: built.integrityToken,
+                fixes: thinFixes(built.fixes),
+              )
+            : built;
         final getUser = _currentUserId;
         // No await between this check and the request: the token is read when the request starts.
         if (getUser != null && getUser() != owner) return;
