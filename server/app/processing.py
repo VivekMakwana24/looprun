@@ -249,11 +249,15 @@ async def _apply(db: Any, user_id: str, o: dict) -> None:
     cell = o["cell"]
     r = await db.cell_power.update_one(
         {"cell": cell, "user_id": user_id, "updated_at": {"$lte": o["t"]}},
-        {"$set": {"power": o["p"], "updated_at": o["t"]}},
+        # ref_power: the power right after this claim. Strength (D10) is measured against it, so a freeze that
+        # rebases `power` does not make a weak hold look full again.
+        {"$set": {"power": o["p"], "ref_power": o["p"], "updated_at": o["t"]}},
     )
     if r.matched_count == 0:
         try:
-            await db.cell_power.insert_one({"cell": cell, "user_id": user_id, "power": o["p"], "updated_at": o["t"]})
+            await db.cell_power.insert_one(
+                {"cell": cell, "user_id": user_id, "power": o["p"], "ref_power": o["p"], "updated_at": o["t"]}
+            )
         except DuplicateKeyError:
             pass  # a newer row exists
     if o["changed"]:

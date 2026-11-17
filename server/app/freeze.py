@@ -122,22 +122,26 @@ async def rebase_for_freeze(db: Any, user_id: str, now: int) -> int:
 
 
 def strength(user: dict, row: dict, now: int) -> float:
-    """How much of the stored power of one of the user's cell_power rows is left at `now`, 0..1.
+    """How much of the user's hold on one cell_power row is left at `now`, 0..1.
 
-    faded power / stored power: 1.0 during the grace period and while a freeze is running, falling towards 0
-    afterwards. A freeze that has run out but is not settled yet (settling is lazy) is counted as if it were:
-    the frozen time is forgiven, exactly as settle_freeze will do. Read-only.
+    faded power / reference power, where the reference is the power right after the last claim (`ref_power`;
+    rows written before it existed fall back to the stored power). 1.0 during the grace period after a claim,
+    falling towards 0 afterwards. A freeze keeps the value where it was when the freeze began (the freeze start
+    rebases `power` to its faded value, the reference stays). A freeze that has run out but is not settled yet
+    (settling is lazy) is counted as if it were: the frozen time is forgiven, exactly as settle_freeze will do.
+    Read-only.
     """
     power = row["power"]
     if power <= 0:
         return 0.0
+    ref = row.get("ref_power") or power
     until, started = user.get("freeze_until"), user.get("freeze_started_at")
     if until is not None and until > now:
-        return 1.0
+        return max(0.0, min(1.0, power / ref))
     updated = row["updated_at"]
     if until is not None and started is not None and until > started and updated < until:
         updated += until - max(updated, started)
-    left = eng.faded_power(user["_id"], power, updated, now, None) / power
+    left = eng.faded_power(user["_id"], power, updated, now, None) / ref
     return max(0.0, min(1.0, left))
 
 

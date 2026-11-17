@@ -80,7 +80,13 @@ def test_strength_respects_a_running_freeze(client, clock):
     assert set(_strengths(client, a)) == {0.5}
     assert client.post("/v1/me/freeze", json={"days": 10}, headers=hdr(a)).status_code == 200
     clock.advance(days=9)
-    # frozen: nothing fades. The stored power was rebased when the freeze began, so it reads as full.
+    # frozen: nothing fades, and the hold stays as weak as it was when the rest days began (it is not
+    # reported as full just because the stored power was rebased at the freeze start).
+    assert set(_strengths(client, a)) == {0.5}
+    clock.advance(days=2)  # the freeze ran out a day ago: fading goes on from 0.5
+    after = _strengths(client, a)
+    assert all(0.45 < s < 0.5 for s in after)
+    run_loop(client, a, t0=clock.now)  # running the loop again restores the hold
     assert set(_strengths(client, a)) == {1.0}
 
 

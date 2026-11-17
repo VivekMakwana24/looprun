@@ -342,5 +342,6 @@ components:
           maximum: 1
           description: >
             ONLY present when mine is true (never for other players). The caller's faded power divided by the
-            stored power at read time: 1.0 during the grace period and while a freeze runs, then falling. The app
-            draws cells below 0.5 as "fading". Running through the cell again brings it back to 1.0 (D10).
+            power right after their last claim of the cell: 1.0 during the grace period, then falling. A freeze
+            holds it at the value it had when the freeze began. The app draws cells below 0.5 as "fading". Running
+            through the cell again brings it back to 1.0 (D10, D11).
