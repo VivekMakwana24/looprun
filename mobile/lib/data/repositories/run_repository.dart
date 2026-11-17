@@ -335,15 +335,19 @@ class RunRepository {
   }
 
   Future<void> _teardown() async {
-    // Each step is guarded: a failing cancel must not stop the run from being saved.
-    try {
-      await _fixSub?.cancel();
-    } catch (_) {}
+    // Each step is guarded: a failing cancel must not stop the run from being saved. The cancel futures
+    // are not awaited: nothing is left to do after them, and a cancel future that never completes (some
+    // stream sources) must not leave the run in "stopping".
+    final fixSub = _fixSub;
     _fixSub = null;
-    try {
-      await _actionSub?.cancel();
-    } catch (_) {}
+    final actionSub = _actionSub;
     _actionSub = null;
+    for (final sub in [fixSub, actionSub]) {
+      if (sub == null) continue;
+      try {
+        unawaited(sub.cancel().then<void>((_) {}, onError: (Object _) {}));
+      } catch (_) {}
+    }
     _timer?.cancel();
     _timer = null;
     _gpsRestartTimer?.cancel();
