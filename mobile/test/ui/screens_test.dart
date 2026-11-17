@@ -313,6 +313,28 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('a failed save shows the error with try again instead of SAVING (review B2)', (tester) async {
+      final h = Harness();
+      final c = await pumpScreen(tester, h, const RunScreen());
+      unawaited(c.read(runViewModelProvider.notifier).start());
+      await pumpABit(tester);
+      h.location.emit(const GeoFix(lat: 50.0, lng: 8.7, t: 1, acc: 6));
+      h.location.emit(const GeoFix(lat: 50.003, lng: 8.7, t: 2, acc: 6));
+      await pumpABit(tester);
+      h.store.failMarkFinished = 1;
+      await tester.tap(find.byKey(const Key('stop_run_button')));
+      await pumpABit(tester, 10);
+      expect(find.byKey(const Key('save_failed')), findsOneWidget);
+      expect(find.byKey(const Key('saving_run_button')), findsNothing);
+      expect(find.text(saveFailedMessage), findsOneWidget);
+      expect(find.textContaining('safe on this phone'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('retry_save_button')));
+      await pumpABit(tester, 10);
+      expect(c.read(runViewModelProvider).finishedRunId, isNotNull);
+      expect(find.byKey(const Key('save_failed')), findsNothing);
+    });
+
     testWidgets('without a run the screen explains and leads back', (tester) async {
       final h = Harness();
       await pumpScreen(tester, h, const RunScreen());

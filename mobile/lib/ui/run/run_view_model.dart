@@ -6,6 +6,8 @@ import '../../data/providers.dart';
 import '../../domain/recorder/loop_gap.dart';
 import '../auth/auth_view_model.dart';
 
+export '../../data/repositories/run_repository.dart' show saveFailedMessage;
+
 /// View model of the Run tab. The state is the repository's [RecordingSnapshot]; commands go back to it.
 class RunViewModel extends Notifier<RecordingSnapshot> {
   @override
@@ -21,6 +23,7 @@ class RunViewModel extends Notifier<RecordingSnapshot> {
   Future<void> pause() => ref.read(runRepositoryProvider).pause();
   Future<void> resume() => ref.read(runRepositoryProvider).resume();
   Future<void> stop() => ref.read(runRepositoryProvider).stop();
+  Future<void> retrySave() => ref.read(runRepositoryProvider).retrySave();
 
   /// The result screen was opened for the finished run.
   void acknowledge() => ref.read(runRepositoryProvider).acknowledge();

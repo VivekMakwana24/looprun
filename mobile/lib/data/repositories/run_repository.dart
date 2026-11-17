@@ -18,6 +18,9 @@ const String gpsStoppedMessage = 'GPS stopped sending updates. Looprun is restar
 const String gpsGaveUpMessage =
     'GPS stopped sending updates. Check that location is switched on, or finish the run.';
 const String gpsErrorMessage = 'GPS problem. Check that location is switched on.';
+const String saveFailedMessage =
+    'Your run could not be saved as finished. All its GPS points are safe on this phone. '
+    'Try again, or go back: Looprun offers to finish it the next time it starts.';
 const String pausedNotificationText = 'Paused. Open Looprun to resume or finish.';
 const String notificationsOffNotice =
     'Notifications are off for Looprun, so the recording notification and its Stop button are hidden. '
@@ -296,10 +299,18 @@ class RunRepository {
     final endedAt = _recorder.endedAt ?? _nowMs();
     final elapsed = _recorder.elapsedMs;
     _recorder.finish();
+    await _save(runId, endedAt, elapsed);
+  }
+
+  /// The finish that failed (disk full, database error), kept for [retrySave].
+  ({String runId, int endedAt, int elapsedMs})? _unsaved;
+
+  Future<void> _save(String runId, int endedAt, int elapsed) async {
     try {
       final stored = (await _store.fixesFor(runId)).length;
       if (stored < 2) {
         await _store.discardRun(runId);
+        _unsaved = null;
         _recorder.reset();
         _emit(const RecordingSnapshot(
           error: 'That run was too short to save (no GPS points recorded).',
@@ -307,24 +318,45 @@ class RunRepository {
         return;
       }
       await _store.markFinished(runId, endedAt);
-    } catch (e) {
+    } catch (_) {
+      // The GPS points are in the database already; only marking the run finished failed. The row stays
+      // "recording", so crash recovery also offers it on the next start.
+      _unsaved = (runId: runId, endedAt: endedAt, elapsedMs: elapsed);
       _emit(RecordingSnapshot(
         status: RecorderStatus.finished,
-        error: 'Could not save the run. It stays on this phone; open Looprun again to finish it.',
+        runId: runId,
+        elapsedMs: elapsed,
+        distanceM: _snap.distanceM,
+        path: _snap.path,
+        saveFailed: true,
+        error: saveFailedMessage,
       ));
       return;
     }
+    _unsaved = null;
     _emit(_snap.copyWith(
       status: RecorderStatus.finished,
       health: GpsHealth.inactive,
       finishedRunId: runId,
       elapsedMs: elapsed,
+      saveFailed: false,
+      clearError: true,
     ));
     unawaited(tickUploads());
   }
 
+  /// "Try again" after a failed save (review blocker B2).
+  Future<void> retrySave() async {
+    final u = _unsaved;
+    if (u == null || !_snap.saveFailed) return;
+    _emit(_snap.copyWith(saveFailed: false, status: RecorderStatus.stopping, clearError: true));
+    await _save(u.runId, u.endedAt, u.elapsedMs);
+  }
+
   /// The screen has shown the result of the finished run; go back to idle.
+  /// Also "Back to the map" after a failed save: the run stays on this phone for crash recovery.
   void acknowledge() {
+    _unsaved = null;
     if (_recorder.status == RecorderStatus.finished) _recorder.reset();
     _path.clear();
     _emit(const RecordingSnapshot());

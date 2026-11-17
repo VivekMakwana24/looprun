@@ -410,4 +410,39 @@ void main() {
     expect(foreground.stops, 0, reason: 'the recovery check must not stop the new run\'s service');
     await repo.stop();
   });
+
+  test('a failed save is a clear error with retry, not an endless "saving" (review B2)', () async {
+    await repo.start();
+    location.emit(fix(50.0, 8.7, t: 1));
+    location.emit(fix(50.001, 8.7, t: 2));
+    await settle();
+    store.failMarkFinished = 1;
+    await repo.stop();
+    expect(repo.current.saveFailed, isTrue);
+    expect(repo.current.error, saveFailedMessage);
+    expect(repo.current.finishedRunId, isNull);
+    expect(repo.current.status, isNot(RecorderStatus.stopping));
+    expect(repo.isRecording, isFalse);
+    // The points are safe and the row is still there for recovery.
+    expect((await store.fixesFor('run-1')).length, 2);
+    expect((await store.runById('run-1'))!.state, 'recording');
+
+    await repo.retrySave();
+    expect(repo.current.saveFailed, isFalse);
+    expect(repo.current.error, isNull);
+    expect(repo.current.finishedRunId, 'run-1');
+    expect((await store.runById('run-1'))!.state, 'finished');
+  });
+
+  test('going back after a failed save leaves the run for crash recovery', () async {
+    await repo.start();
+    location.emit(fix(50.0, 8.7, t: 1));
+    location.emit(fix(50.001, 8.7, t: 2));
+    await settle();
+    store.failMarkFinished = 1;
+    await repo.stop();
+    repo.acknowledge();
+    expect(repo.current.status, RecorderStatus.idle);
+    expect((await repo.findUnfinishedRun())!.id, 'run-1');
+  });
 }

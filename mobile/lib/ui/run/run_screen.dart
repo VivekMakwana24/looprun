@@ -37,14 +37,24 @@ class RunScreen extends ConsumerWidget {
     final vm = ref.read(runViewModelProvider.notifier);
     final stopping = run.status == RecorderStatus.stopping;
     // Finished counts as live until the frame has moved on to the result (no "no run" flash).
-    final live = run.isActive || stopping || run.status == RecorderStatus.finished;
+    final live = !run.saveFailed && (run.isActive || stopping || run.status == RecorderStatus.finished);
 
     return Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
-          child: live ? _Live(run: run) : _NoRun(run: run, onBack: () => _leave(context)),
+          child: live
+              ? _Live(run: run)
+              : run.saveFailed
+                  ? _SaveFailed(
+                      onRetry: vm.retrySave,
+                      onBack: () {
+                        vm.acknowledge();
+                        _leave(context);
+                      },
+                    )
+                  : _NoRun(run: run, onBack: () => _leave(context)),
         ),
       ),
       bottomNavigationBar: !live
@@ -113,6 +123,48 @@ class _NoRun extends StatelessWidget {
           background: c.accent,
           foreground: c.onAccent,
           onTap: onBack,
+        ),
+      ],
+    );
+  }
+}
+
+/// Stopping worked but marking the run finished did not (review B2). The points are stored.
+class _SaveFailed extends StatelessWidget {
+  const _SaveFailed({required this.onRetry, required this.onBack});
+  final VoidCallback onRetry;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.lr;
+    return Column(
+      key: const Key('save_failed'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Spacer(),
+        Text('NOT SAVED YET', style: LrText.display(64, color: c.text, height: 0.9)),
+        const SizedBox(height: 12),
+        Semantics(
+          liveRegion: true,
+          child: Text(saveFailedMessage,
+              style: LrText.body(16, weight: FontWeight.w500, color: c.text2, height: 1.4)),
+        ),
+        const Spacer(),
+        LrBigButton(
+          key: const Key('retry_save_button'),
+          label: 'TRY AGAIN',
+          background: c.accent,
+          foreground: c.onAccent,
+          onTap: onRetry,
+        ),
+        const SizedBox(height: 10),
+        LrBox(
+          key: const Key('save_failed_back_button'),
+          onTap: onBack,
+          radius: 22,
+          height: 50,
+          child: Text('Back to the map', style: LrText.body(16, weight: FontWeight.w500, color: c.text2)),
         ),
       ],
     );

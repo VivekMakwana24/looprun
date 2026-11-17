@@ -14,6 +14,7 @@ class RecordingSnapshot {
     this.accuracyM,
     this.error,
     this.notice,
+    this.saveFailed = false,
     this.finishedRunId,
   });
 
@@ -31,6 +32,10 @@ class RecordingSnapshot {
   /// Something the runner should know that is not a failure (for example: notifications are off).
   final String? notice;
 
+  /// The run stopped but could not be marked finished in the database (its points are stored). The screen
+  /// shows the error with "Try again" instead of the saving state.
+  final bool saveFailed;
+
   /// Set when a run was finished and saved, until the screen calls `acknowledge()`.
   final String? finishedRunId;
 
@@ -46,6 +51,7 @@ class RecordingSnapshot {
     double? accuracyM,
     String? error,
     String? notice,
+    bool? saveFailed,
     bool clearError = false,
     String? finishedRunId,
   }) {
@@ -59,6 +65,7 @@ class RecordingSnapshot {
       accuracyM: accuracyM ?? this.accuracyM,
       error: clearError ? null : (error ?? this.error),
       notice: notice ?? this.notice,
+      saveFailed: saveFailed ?? this.saveFailed,
       finishedRunId: finishedRunId ?? this.finishedRunId,
     );
   }

@@ -247,6 +247,9 @@ class MemoryStore implements RunStore, UploadStore {
   final Map<String, UploadJob> jobs = {};
   bool failFixWrites = false;
 
+  /// How many of the next markFinished calls throw (a full disk when the run is finished).
+  int failMarkFinished = 0;
+
   /// While set, addFix waits for it before storing (a slow disk). Complete it to let the writes land.
   Completer<void>? holdFixWrites;
 
@@ -320,6 +323,10 @@ class MemoryStore implements RunStore, UploadStore {
 
   @override
   Future<void> markFinished(String id, int endedAt) async {
+    if (failMarkFinished > 0) {
+      failMarkFinished--;
+      throw StateError('database or disk is full');
+    }
     final r = _own(id)!;
     r.state = 'finished';
     r.endedAt = endedAt;
