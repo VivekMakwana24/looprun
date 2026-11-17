@@ -110,8 +110,11 @@ class LeaderboardScreen extends ConsumerWidget {
             await ref.read(weeklyLeaderboardProvider.future);
           } catch (_) {}
         },
-        child: ListView(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.only(top: 22, bottom: 20),
+          child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _pad(Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -137,6 +140,7 @@ class LeaderboardScreen extends ConsumerWidget {
             if (offline && board != null) ...[_pad(const OfflineBanner()), const SizedBox(height: 14)],
             body,
           ],
+        ),
         ),
       ),
     );

@@ -36,7 +36,8 @@ class RunScreen extends ConsumerWidget {
     final run = ref.watch(runViewModelProvider);
     final vm = ref.read(runViewModelProvider.notifier);
     final stopping = run.status == RecorderStatus.stopping;
-    final live = run.isActive || stopping;
+    // Finished counts as live until the frame has moved on to the result (no "no run" flash).
+    final live = run.isActive || stopping || run.status == RecorderStatus.finished;
 
     return Scaffold(
       backgroundColor: c.bg,

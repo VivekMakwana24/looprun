@@ -138,8 +138,10 @@ class ProfileScreen extends ConsumerWidget {
 
     return SafeArea(
       bottom: false,
-      child: ListView(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+        child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -335,6 +337,7 @@ class ProfileScreen extends ConsumerWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

@@ -2,12 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config.dart';
+import '../../core/theme.dart';
 import '../auth/auth_view_model.dart';
+import '../core/links_view_model.dart';
+import '../core/widgets.dart';
 import 'disclosure_view_model.dart';
 
 /// Texts must match docs/compliance/location-disclosure.md ("In-app screen text (must match code)").
+/// The section headings are drawn in capitals by style only; the strings stay as in that document.
 const String disclosureTitle = 'Your location';
 const String disclosureHeading = 'Before we ask for location access';
+const String disclosureCollectTitle = 'What we collect';
+const String disclosureWhyTitle = 'Why';
+const String disclosureWhenTitle = 'When';
+const String disclosureSharingTitle = 'Sharing';
+const String disclosureControlTitle = 'Your control';
+const String disclosurePolicyLabel = 'Privacy Policy';
+const String disclosureAgreeLabel = 'Agree and continue';
+const String disclosureDeclineLabel = 'No thanks, sign out';
 const String disclosureCollect =
     'Your precise GPS position (latitude, longitude, time and accuracy) while you record a run, '
     'and whether your phone reports it as a mock location. We also read your current position once '
@@ -47,89 +59,152 @@ class _DisclosureScreenState extends ConsumerState<DisclosureScreen> {
     await ref.read(disclosureViewModelProvider.notifier).accept();
   }
 
-  void _showPolicy() {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Privacy Policy'),
-        content: SelectableText(AppConfig.privacyPolicyUrl),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
-      ),
-    );
+  Future<void> _showPolicy() async {
+    final links = ref.read(linksViewModelProvider);
+    final opened = await links.openPrivacyPolicy();
+    if (!opened && mounted) await showPrivacyPolicyFallback(context, links.privacyPolicyUrl);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.lr;
+    final sections = <(String, String)>[
+      (disclosureCollectTitle, disclosureCollect),
+      (disclosureWhyTitle, disclosureWhy),
+      (disclosureWhenTitle, disclosureWhen),
+      (disclosureSharingTitle, disclosureSharing(AppConfig.mapTileProvider)),
+      (disclosureControlTitle, disclosureControl),
+    ];
     return Scaffold(
-      appBar: AppBar(title: const Text(disclosureTitle)),
+      backgroundColor: c.bg,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 12),
+                child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
                     children: [
-                      Text(disclosureHeading, style: theme.textTheme.titleLarge),
-                      const SizedBox(height: 16),
-                      const _Point(title: 'What we collect', text: disclosureCollect),
-                      const _Point(title: 'Why', text: disclosureWhy),
-                      const _Point(title: 'When', text: disclosureWhen),
-                      _Point(
-                        title: 'Sharing',
-                        text: disclosureSharing(AppConfig.mapTileProvider),
-                      ),
-                      const _Point(title: 'Your control', text: disclosureControl),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton(
-                          key: const Key('disclosure_privacy_link'),
-                          onPressed: _showPolicy,
-                          child: const Text('Privacy Policy'),
-                        ),
+                      Icon(Icons.location_on_outlined, size: 18, color: c.accentText),
+                      const SizedBox(width: 8),
+                      Semantics(
+                        header: true,
+                        child: CapsLabel(disclosureTitle, style: LrText.label(14, color: c.accentText)),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  Semantics(
+                    header: true,
+                    child: Text(disclosureHeading,
+                        style: LrText.display(38, color: c.text, tracking: 0.01, height: 1)),
+                  ),
+                  const SizedBox(height: 26),
+                  for (var i = 0; i < sections.length; i++)
+                    _Point(
+                      title: sections[i].$1,
+                      text: sections[i].$2,
+                      last: i == sections.length - 1,
+                    ),
+                ],
               ),
-              const SizedBox(height: 16),
-              FilledButton(
-                key: const Key('disclosure_agree_button'),
-                onPressed: _busy ? null : _agree,
-                child: const Text('Agree and continue'),
               ),
-              TextButton(
-                key: const Key('disclosure_decline_button'),
-                onPressed: _busy ? null : () => ref.read(authViewModelProvider.notifier).signOut(),
-                child: const Text('No thanks, sign out'),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      key: const Key('disclosure_privacy_link'),
+                      onPressed: _showPolicy,
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      child: Text(disclosurePolicyLabel,
+                          style: LrText.body(15,
+                              weight: FontWeight.w600, color: c.accentText, decoration: TextDecoration.underline)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  LrBox(
+                    key: const Key('disclosure_agree_button'),
+                    onTap: _busy ? null : _agree,
+                    color: c.accent,
+                    radius: 22,
+                    height: 62,
+                    child: Text(disclosureAgreeLabel,
+                        style: LrText.body(18, weight: FontWeight.w600, color: c.onAccent)),
+                  ),
+                  const SizedBox(height: 10),
+                  LrBox(
+                    key: const Key('disclosure_decline_button'),
+                    onTap: _busy ? null : () => ref.read(authViewModelProvider.notifier).signOut(),
+                    radius: 22,
+                    height: 50,
+                    child: Text(disclosureDeclineLabel,
+                        style: LrText.body(16, weight: FontWeight.w500, color: c.text2)),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+/// One section on the timeline: a ringed dot (filled for the last), a line down to the next one.
 class _Point extends StatelessWidget {
-  const _Point({required this.title, required this.text});
+  const _Point({required this.title, required this.text, required this.last});
   final String title;
   final String text;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final c = context.lr;
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          Text(text),
+          SizedBox(
+            width: 14,
+            child: Column(
+              children: [
+                const SizedBox(height: 3),
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: last ? c.accent : null,
+                    border: last ? null : Border.all(color: c.accent, width: 3),
+                  ),
+                ),
+                if (!last) Expanded(child: Container(width: 2, color: c.line)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: last ? 0 : 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CapsLabel(title, style: LrText.label(17, color: c.text, tracking: 0.1)),
+                  const SizedBox(height: 6),
+                  Text(text, style: LrText.body(14, color: c.text2, height: 1.5)),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:looprun/data/models/api_exception.dart';
 import 'package:looprun/data/providers.dart';
 import 'package:looprun/data/services/token_store.dart';
 import 'package:looprun/ui/auth/sign_in_screen.dart';
@@ -14,6 +15,7 @@ Widget _app({required bool devAuth, FakeApiService? api}) {
       tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
       apiServiceProvider.overrideWithValue(api ?? FakeApiService()),
       googleAuthServiceProvider.overrideWithValue(FakeGoogleAuthService()),
+      apiBaseUrlHintProvider.overrideWithValue(null),
     ],
     child: const MaterialApp(home: SignInScreen()),
   );
@@ -39,9 +41,31 @@ void main() {
     final api = FakeApiService();
     await tester.pumpWidget(_app(devAuth: true, api: api));
     await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('dev_login_button')));
     await tester.tap(find.byKey(const Key('dev_login_button')));
     await tester.pump();
     await tester.pump();
     expect(api.idTokens, ['dev:dev']);
+  });
+
+  testWidgets('a failed Google sign-in shows the plain sentence under the button', (tester) async {
+    final api = FakeApiService()..authError = const ApiException(null, 'SocketException: refused');
+    await tester.pumpWidget(_app(devAuth: false, api: api));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('google_sign_in_button')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text("Can't reach the server. Check your connection."), findsOneWidget);
+    expect(find.textContaining('SocketException'), findsNothing);
+  });
+
+  testWidgets('the copy of the mockup is there', (tester) async {
+    await tester.pumpWidget(_app(devAuth: false));
+    await tester.pump();
+    expect(find.text('LOOPRUN'), findsOneWidget);
+    expect(find.text('Run a loop. Fill the map.'), findsOneWidget);
+    expect(find.text('Every cell inside becomes yours'), findsOneWidget);
+    expect(find.text('Sign in with Google'), findsOneWidget);
+    expect(tester.getSize(find.byKey(const Key('google_sign_in_button'))).height, greaterThanOrEqualTo(48));
   });
 }

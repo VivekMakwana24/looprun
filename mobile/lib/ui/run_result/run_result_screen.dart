@@ -139,8 +139,10 @@ class _Body extends ConsumerWidget {
       }
     }
 
-    return ListView(
+    return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 22),
+      child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Bib(run: run, view: view),
         const SizedBox(height: 16),
@@ -192,6 +194,7 @@ class _Body extends ConsumerWidget {
           ),
         ),
       ],
+      ),
     );
   }
 }

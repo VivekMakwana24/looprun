@@ -4,14 +4,14 @@ Google Play requires an in-app disclosure that is shown in normal use (not only 
 
 ## Flow (matches the code today)
 
-- `AppGate` shows the disclosure screen right after sign-in, until the user accepts (stored as `location_disclosure_accepted_v1`).
+- The go_router redirect (`appRedirect` in `mobile/lib/router.dart`) shows the disclosure screen right after sign-in, until the user accepts (stored as `location_disclosure_accepted_v1`).
 - **Agree and continue** triggers the Android location prompt (then notifications). Nothing is requested before that tap.
 - **No thanks, sign out** signs the user out. Looprun needs location to work, so there is no "use the app without location" path in this build.
 - The app does not request background ("all the time") location.
 
 ## In-app screen text (must match code)
 
-`mobile/lib/ui/disclosure/disclosure_screen.dart` shows exactly this (strings verified identical on 2026-11-04).
+`mobile/lib/ui/disclosure/disclosure_screen.dart` shows exactly this. Since the redesign (2026-11-17) `mobile/test/ui/disclosure_test.dart` reads this file and fails if any string of the screen is not found here verbatim. The section headings and the title are drawn in capitals by style only (the strings, and what screen readers read, are as written below).
 
 **App bar title:** `Your location`
 
@@ -32,7 +32,7 @@ Google Play requires an in-app disclosure that is shown in normal use (not only 
 **Your control**
 > You can hide places such as your home with Home zones in Profile, and delete your account and runs at any time.
 
-**Link:** a `Privacy Policy` button that opens a dialog showing [PRIVACY_POLICY_URL] as selectable text. It does not open the browser (no `url_launcher` yet), so the link is not tappable; adding `url_launcher` is recommended before release.
+**Link:** a `Privacy Policy` button that opens [PRIVACY_POLICY_URL] in the browser (`url_launcher`). Only if no browser takes the address (or the build still has the placeholder) does it show the address in a dialog as selectable text.
 
 **Buttons:** `Agree and continue` (key `disclosure_agree_button`) | `No thanks, sign out` (key `disclosure_decline_button`)
 
