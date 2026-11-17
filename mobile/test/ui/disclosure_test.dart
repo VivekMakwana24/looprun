@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:looprun/app.dart';
+import 'package:looprun/core/config.dart';
 import 'package:looprun/data/providers.dart';
 import 'package:looprun/data/services/token_store.dart';
 import 'package:looprun/ui/disclosure/disclosure_screen.dart';
@@ -91,7 +92,13 @@ void main() {
     );
     await tester.pump();
     expect(find.text(disclosureHeading), findsOneWidget);
-    for (final t in [disclosureCollect, disclosureWhy, disclosureWhen, disclosureControl]) {
+    for (final t in [
+      disclosureCollect,
+      disclosureWhy,
+      disclosureWhen,
+      disclosureSharing(AppConfig.mapTileProvider),
+      disclosureControl,
+    ]) {
       expect(find.text(t), findsOneWidget);
     }
     // Headings are the same strings, drawn in capitals by style only (screen readers get the string).
@@ -117,5 +124,46 @@ void main() {
     await tester.pump();
     expect(links.opened, ['https://looprun.example/privacy']);
     expect(permissions.requests, 0);
+  });
+
+  test('every text of the compliance document is on the screen (doc -> code)', () {
+    final doc = File('../docs/compliance/location-disclosure.md').readAsStringSync();
+    final start = doc.indexOf('## In-app screen text');
+    final end = doc.indexOf('\n## ', start + 5);
+    expect(start, greaterThanOrEqualTo(0));
+    final section = doc.substring(start, end);
+
+    final paragraphs = RegExp(r'^> (.+)$', multiLine: true).allMatches(section).map((m) => m.group(1)!.trim());
+    final codeParagraphs = {
+      disclosureCollect,
+      disclosureWhy,
+      disclosureWhen,
+      disclosureSharing('[MAP_TILE_PROVIDER]'),
+      disclosureControl,
+    };
+    expect(paragraphs.toSet(), codeParagraphs, reason: 'the paragraphs of the doc and of the screen differ');
+
+    final headings = RegExp(r'^\*\*([^*:]+)\*\*\s*$', multiLine: true).allMatches(section).map((m) => m.group(1)!);
+    expect(headings.toSet(), {
+      disclosureCollectTitle,
+      disclosureWhyTitle,
+      disclosureWhenTitle,
+      disclosureSharingTitle,
+      disclosureControlTitle,
+    });
+
+    final quoted = RegExp('`([^`]+)`').allMatches(section).map((m) => m.group(1)!).toSet();
+    final codeStrings = {
+      disclosureTitle,
+      disclosureHeading,
+      disclosurePolicyLabel,
+      disclosureAgreeLabel,
+      disclosureDeclineLabel,
+    };
+    final keys = {'disclosure_agree_button', 'disclosure_decline_button', '[MAP_TILE_PROVIDER]', '[PRIVACY_POLICY_URL]', 'url_launcher'};
+    final files = quoted.where((q) => q.contains('/') || q.endsWith('.dart') || q.endsWith('.md'));
+    expect(quoted.difference(codeStrings).difference(keys).difference(files.toSet()), isEmpty,
+        reason: 'a string in the doc is not on the screen');
+    expect(codeStrings.difference(quoted), isEmpty);
   });
 }
