@@ -63,10 +63,11 @@ void usePhoneSize(WidgetTester tester) {
 /// Pumps [screen] inside the app's theme, signed in when the harness has a session.
 Future<ProviderContainer> pumpScreen(WidgetTester tester, Harness h, Widget screen) async {
   usePhoneSize(tester);
-  final overrides = await h.overrides();
-  await tester.pumpWidget(ProviderScope(overrides: overrides, child: _Themed(child: screen)));
-  final container = ProviderScope.containerOf(tester.element(find.byType(_Themed)));
+  final container = ProviderContainer(overrides: await h.overrides());
+  addTearDown(container.dispose);
+  // Signed in before the first frame, like the app (the router only shows screens to a signed-in user).
   await container.read(authRepositoryProvider).restore();
+  await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _Themed(child: screen)));
   await tester.pump();
   return container;
 }

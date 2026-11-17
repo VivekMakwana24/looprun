@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:looprun/core/theme.dart';
@@ -96,7 +98,13 @@ void main() {
       final h = Harness();
       await h.store.createRun('r1', 1);
       await h.store.markFinished('r1', 2);
-      h.store.jobs['r1'] = const UploadJob(runId: 'r1', stage: UploadStage.queued, attempts: 2);
+      // Two failed tries, next one far away (otherwise the queue would upload it right after sign-in).
+      h.store.jobs['r1'] = UploadJob(
+        runId: 'r1',
+        stage: UploadStage.queued,
+        attempts: 2,
+        nextAttemptAt: DateTime.now().add(const Duration(days: 1)).millisecondsSinceEpoch,
+      );
       await pumpScreen(tester, h, const MapScreen());
       await pumpABit(tester);
       expect(find.text('1 run is waiting to upload'), findsOneWidget);
@@ -274,7 +282,8 @@ void main() {
       final h = Harness();
       final semantics = tester.ensureSemantics();
       final c = await pumpScreen(tester, h, const RunScreen());
-      await c.read(runViewModelProvider.notifier).start();
+      // Commands are not awaited in the test body: the fake clock only moves when the tester pumps.
+      unawaited(c.read(runViewModelProvider.notifier).start());
       await pumpABit(tester);
       expect(find.text('RECORDING'), findsOneWidget);
       expect(find.text('FINISH RUN'), findsOneWidget);
@@ -293,9 +302,10 @@ void main() {
       expect(find.text('RESUME'), findsOneWidget);
       expect(find.text('FINISH'), findsOneWidget);
 
-      await c.read(runViewModelProvider.notifier).stop();
-      await pumpABit(tester);
+      await tester.tap(find.byKey(const Key('stop_run_button')));
+      await pumpABit(tester, 20);
       expect(c.read(runViewModelProvider).status, RecorderStatus.finished);
+      expect(find.byKey(const Key('saving_run_button')), findsOneWidget, reason: 'no "no run" flash');
       semantics.dispose();
     });
 
