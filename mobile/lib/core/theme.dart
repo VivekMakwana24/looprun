@@ -407,9 +407,3 @@ ThemeData buildTheme([AppThemeId id = defaultThemeId]) {
   );
 }
 
-// Temporary: used by the pre-redesign screens until they are replaced (next commit).
-const Color mineColor = Color(0xFF1B8A5A);
-const Color othersColor = Color(0xFFE5701B);
-const Color hiddenColor = Color(0xFF7A7A8C);
-const Color healthGood = Color(0xFF2E9E5B);
-const Color healthWarn = Color(0xFFF2A100);
