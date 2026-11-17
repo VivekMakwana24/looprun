@@ -3,12 +3,40 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../auth/auth_view_model.dart';
+import '../run/run_view_model.dart';
 
 /// The weekly board from the server. Also feeds "cells held" and "rank this week" on the map and in Profile.
 final weeklyLeaderboardProvider = FutureProvider.autoDispose<Leaderboard>((ref) {
   // Per account: load again when somebody else signs in.
   ref.watch(authViewModelProvider.select((s) => s.user?.id));
   return ref.watch(cellRepositoryProvider).weeklyLeaderboard();
+});
+
+/// Keeps the board (and with it CELLS HELD / rank on the map and in Profile) up to date (review B1).
+/// Reloads it when one of the caller's runs gets a final result that claimed cells, and when a live frame
+/// gives the caller a cell or takes one away. Watched by the main frame.
+final boardRefreshProvider = Provider.autoDispose<void>((ref) {
+  void refresh() => ref.invalidate(weeklyLeaderboardProvider);
+
+  final sub = ref.watch(cellRepositoryProvider).ownCellsChanged.listen((_) => refresh());
+  ref.onDispose(sub.cancel);
+
+  final seen = <String, String>{};
+  var first = true;
+  ref.listen<AsyncValue<List<RunSummary>>>(recentRunsProvider, (previous, next) {
+    final runs = next.valueOrNull;
+    if (runs == null) return;
+    var changed = false;
+    for (final r in runs) {
+      final res = r.result;
+      final key = res == null ? '' : '${res.status}:${res.cellsClaimed}:${res.cellsTakenFromOthers}';
+      final old = seen[r.id];
+      seen[r.id] = key;
+      if (!first && old != key && res != null && !res.isProcessing && res.cellsClaimed > 0) changed = true;
+    }
+    first = false;
+    if (changed) refresh();
+  }, fireImmediately: true);
 });
 
 /// One lane (row) of the board.

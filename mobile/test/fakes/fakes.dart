@@ -130,11 +130,22 @@ class FakeApiService implements ApiService {
   @override
   Future<RunStatus> uploadRun(RunUpload run) async {
     uploadedIds.add(run.id);
-    return RunStatus(id: run.id, status: runStatus.status);
+    return _status(run.id);
   }
 
+  RunStatus _status(String id) => RunStatus(
+        id: id,
+        status: runStatus.status,
+        distanceM: runStatus.distanceM,
+        movingSeconds: runStatus.movingSeconds,
+        loops: runStatus.loops,
+        cellsClaimed: runStatus.cellsClaimed,
+        cellsTakenFromOthers: runStatus.cellsTakenFromOthers,
+        flags: runStatus.flags,
+      );
+
   @override
-  Future<RunStatus> getRun(String id) async => RunStatus(id: id, status: runStatus.status);
+  Future<RunStatus> getRun(String id) async => _status(id);
 }
 
 class FakeLocationService implements LocationService {
@@ -245,6 +256,24 @@ class MemoryStore implements RunStore, UploadStore {
 
   final Map<String, _Run> _runs = {};
   final Map<String, UploadJob> jobs = {};
+
+  /// Watchers are told about every write, like Drift's query streams.
+  final StreamController<void> _changes = StreamController<void>.broadcast();
+  void _changed() => _changes.add(null);
+
+  /// The current value at once, then again after every write.
+  Stream<T> _watch<T>(T Function() read) {
+    late StreamController<T> c;
+    StreamSubscription<void>? sub;
+    c = StreamController<T>(
+      onListen: () {
+        c.add(read());
+        sub = _changes.stream.listen((_) => c.add(read()));
+      },
+      onCancel: () => sub?.cancel(),
+    );
+    return c.stream;
+  }
   bool failFixWrites = false;
 
   /// How many of the next markFinished calls throw (a full disk when the run is finished).
@@ -287,6 +316,7 @@ class MemoryStore implements RunStore, UploadStore {
   @override
   Future<void> createRun(String id, int startedAt) async {
     _runs[id] = _Run(id, startedAt, _uid);
+    _changed();
   }
 
   @override
@@ -319,6 +349,7 @@ class MemoryStore implements RunStore, UploadStore {
   @override
   Future<void> setRunState(String id, String state) async {
     _own(id)?.state = state;
+    _changed();
   }
 
   @override
@@ -331,6 +362,7 @@ class MemoryStore implements RunStore, UploadStore {
     r.state = 'finished';
     r.endedAt = endedAt;
     jobs[id] = UploadJob(runId: id, stage: UploadStage.queued);
+    _changed();
   }
 
   @override
@@ -338,15 +370,15 @@ class MemoryStore implements RunStore, UploadStore {
     if (_own(id) == null) return;
     _runs.remove(id);
     jobs.remove(id);
+    _changed();
   }
 
   @override
-  Stream<RunSummary?> watchRun(String id) =>
-      Stream.value(_own(id) == null ? null : _summary(_own(id)!));
+  Stream<RunSummary?> watchRun(String id) => _watch(() => _own(id) == null ? null : _summary(_own(id)!));
 
   @override
-  Stream<List<RunSummary>> watchRecentRuns({int limit = 10}) => Stream.value(
-      _runs.values.where((r) => _mine(r) && r.state == 'finished').map(_summary).toList());
+  Stream<List<RunSummary>> watchRecentRuns({int limit = 10}) => _watch(
+      () => _runs.values.where((r) => _mine(r) && r.state == 'finished').map(_summary).toList());
 
   @override
   Future<void> wipe() async {
@@ -374,6 +406,7 @@ class MemoryStore implements RunStore, UploadStore {
       throw StateError('Run ${job.runId} belongs to another account');
     }
     jobs[job.runId] = job;
+    _changed();
   }
 
   @override

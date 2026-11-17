@@ -128,4 +128,86 @@ void main() {
       expect(sub.read().week, isNull);
     });
   });
+
+  group('boardRefreshProvider (review B1)', () {
+    late FakeApiService api;
+    late FakeLiveService live;
+    late MemoryStore store;
+    late ProviderContainer c;
+
+    setUp(() async {
+      api = FakeApiService()
+        ..board = const Leaderboard(week: 'w', entries: [], me: LeaderboardMe(rank: null, cells: 0));
+      live = FakeLiveService();
+      store = MemoryStore();
+      c = ProviderContainer(overrides: [
+        apiServiceProvider.overrideWithValue(api),
+        liveServiceProvider.overrideWithValue(live),
+        runStoreProvider.overrideWithValue(store),
+        uploadStoreProvider.overrideWithValue(store),
+        locationServiceProvider.overrideWithValue(FakeLocationService()),
+        permissionServiceProvider.overrideWithValue(FakePermissionService()),
+        foregroundServiceProvider.overrideWithValue(FakeForegroundService()),
+        tokenStoreProvider.overrideWithValue(
+          InMemoryTokenStore(const StoredSession(token: 't', userId: 'u1', userName: 'Vivek')),
+        ),
+        googleAuthServiceProvider.overrideWithValue(FakeGoogleAuthService()),
+      ]);
+      await c.read(authRepositoryProvider).restore();
+    });
+
+    tearDown(() => c.dispose());
+
+    test('a run that is accepted with cells updates CELLS HELD and the rank', () async {
+      final standing = c.listen(myStandingProvider, (previous, next) {});
+      c.listen(boardRefreshProvider, (previous, next) {});
+      await settle();
+      expect(standing.read().cells, 0);
+
+      await store.createRun('r1', 1);
+      await store.markFinished('r1', 2);
+      await settle();
+      api.runStatus = const RunStatus(id: 'r1', status: RunStatus.accepted, cellsClaimed: 42);
+      api.board = const Leaderboard(
+        week: 'w',
+        entries: [LeaderboardEntry(rank: 1, user: UserRef(id: 'u1', name: 'Vivek'), cells: 42)],
+        me: LeaderboardMe(rank: 1, cells: 42),
+      );
+      await c.read(runRepositoryProvider).tickUploads();
+      await settle();
+      expect(standing.read().cells, 42);
+      expect(standing.read().rank, 1);
+    });
+
+    test('a run that claimed nothing does not reload the board', () async {
+      c.listen(myStandingProvider, (previous, next) {});
+      c.listen(boardRefreshProvider, (previous, next) {});
+      await settle();
+      final calls = api.boardCalls;
+      await store.createRun('r1', 1);
+      await store.markFinished('r1', 2);
+      api.runStatus = const RunStatus(id: 'r1', status: RunStatus.accepted, cellsClaimed: 0);
+      await c.read(runRepositoryProvider).tickUploads();
+      await settle();
+      expect(api.boardCalls, calls);
+    });
+
+    test('a live frame that gives me a cell (or takes one) reloads the board', () async {
+      c.listen(myStandingProvider, (previous, next) {});
+      c.listen(boardRefreshProvider, (previous, next) {});
+      await settle();
+      final calls = api.boardCalls;
+      final cells = c.read(cellRepositoryProvider);
+      cells.startLive('1,2,3,4');
+      live.latest.add(const CellChange(id: 'x', lat: 1, lng: 2, owner: UserRef(id: 'u2', name: 'Bob'), mine: false));
+      await settle();
+      expect(api.boardCalls, calls, reason: 'somebody else\'s cell does not change my count');
+      live.latest.add(const CellChange(id: 'x', lat: 1, lng: 2, owner: UserRef(id: 'u1', name: 'Vivek'), mine: true));
+      await settle();
+      expect(api.boardCalls, calls + 1);
+      live.latest.add(const CellChange(id: 'x', lat: 1, lng: 2, owner: UserRef(id: 'u2', name: 'Bob'), mine: false));
+      await settle();
+      expect(api.boardCalls, calls + 2);
+    });
+  });
 }

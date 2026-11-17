@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/routes.dart';
 import '../../core/theme.dart';
 import '../core/widgets.dart';
+import '../leaderboard/leaderboard_view_model.dart';
 import '../run/run_view_model.dart';
 import 'home_view_model.dart';
 
@@ -70,6 +71,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   Widget build(BuildContext context) {
     ref.watch(uploadSyncProvider);
+    ref.watch(boardRefreshProvider);
     ref.listen<String?>(runViewModelProvider.select((s) => s.finishedRunId), (previous, next) {
       if (next != null && next != previous) {
         ref.read(runViewModelProvider.notifier).acknowledge();

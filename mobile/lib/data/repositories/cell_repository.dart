@@ -34,6 +34,7 @@ class CellRepository {
 
   final Map<String, Cell> _cells = {};
   final StreamController<List<Cell>> _updates = StreamController<List<Cell>>.broadcast();
+  final StreamController<void> _ownChanged = StreamController<void>.broadcast();
 
   StreamSubscription<CellChange>? _liveSub;
   Timer? _reconnectTimer;
@@ -46,6 +47,9 @@ class CellRepository {
 
   /// Emits a new list whenever the cache changes.
   Stream<List<Cell>> get updates => _updates.stream;
+
+  /// Fires when a live frame gave the caller a cell or took one away (so their cell count changed).
+  Stream<void> get ownCellsChanged => _ownChanged.stream;
 
   /// Whether the live socket is wanted (it may be between reconnects).
   bool get liveWanted => _liveBbox != null;
@@ -178,13 +182,16 @@ class CellRepository {
   }
 
   void _apply(CellChange change) {
+    final before = _cells[change.id]?.mine ?? false;
     _cells[change.id] = change.toCell();
     _publish();
+    if (before != change.mine && !_ownChanged.isClosed) _ownChanged.add(null);
   }
 
   Future<void> dispose() async {
     _disposed = true;
     stopLive();
     await _updates.close();
+    await _ownChanged.close();
   }
 }
