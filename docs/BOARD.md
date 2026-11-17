@@ -14,6 +14,7 @@ Status values: todo, building, verifying, accepted, blocked
 | O1 | DevOps: Dockerfiles, compose, CI workflows, deploy workflow | DevOps | verifying (fixes applied; re-verify after mobile lands) | workflows lint clean; compose file valid; deploy workflow documented |
 | C1 | Compliance: privacy policy, data safety answers, in-app disclosure text, listing copy, tester guide | Store | verifying (fixes applied; re-verify after mobile lands) | text complete, matches real behaviour |
 | SF1 (done in fix wave 1) | Server fix: when a freeze starts, rebase user's cell_power to faded(now) with updated_at=now-grace; skip apply_claim when credit is 0; enforce max_freeze_days; validate Config | Server | todo | tests for each; from engine verifier findings 1,2,7 |
+| M3 | Mobile redesign "Night Track" (docs/design): themes, lanes, hexagon map, run, result, board, profile, login errors, review F3-F26 | Mobile | verifying (CI green; device test and independent review pending; docs/verification/M-redesign.md) | screens match the mockups; only real data shown; disclosure strings match the compliance doc; architecture test green |
 | L1 | Letter assistant | Letter | todo | starts after repo exists |
 
 Verification: every module is checked by a separate verifier agent before it moves to accepted.

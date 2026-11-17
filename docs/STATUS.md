@@ -1,14 +1,20 @@
-# Status (2026-11-04)
+# Status (2026-11-17)
 
-CI on 71ec9ef: all four jobs green (Python ruff+pytest, real MongoDB/Redis integration, Flutter analyze/test/debug APK, Docker build). First successful compile of the mobile app.
+CI green on main after the app redesign (all four jobs: Python ruff+pytest, real MongoDB/Redis integration, Flutter
+analyze/test/debug APK + manifest check, Docker build). Report: docs/verification/M-redesign.md.
 
 | Lane | State |
 | --- | --- |
-| Engine | Accepted. 97 tests. |
-| Server | Accepted after fix waves 1 and 2 (N1-N6 done). 214 tests with engine, plus real-services integration in CI. |
-| Mobile | Phase 1 compiles and passes CI. Phase 2 (refactor to docs/MOBILE_ARCHITECTURE.md) starting. |
-| DevOps/Compliance | Fixes applied; re-verification after mobile phase 2. |
-| Letter assistant | Held until mobile phase 2 lands. |
+| Engine | Accepted. Cell boundary helper for D10. |
+| Server | Accepted after fix waves 1 and 2. D10: cell boundary, own-cell strength, leaderboard `me`, `GET /me` with freeze quota. |
+| Mobile | Phase 2 accepted with fixes. "Night Track" redesign done (4 themes, lanes, hexagon map, live run loop picture, result bib, board, profile); most deferred review items F3-F26 fixed. Compiles and passes tests in CI; **not yet run on a device**. |
+| DevOps/Compliance | Fixes applied; disclosure doc and tester guide updated for the redesign. Re-verification pending. |
+| Letter assistant | Held. |
 
-Open follow-ups: docs/verification/O1-C1-followups.md, mobile F11 (CI check for ACCESS_BACKGROUND_LOCATION in merged manifest), commit pubspec.lock, /live socket + reports in app, stale `deleting` accounts sweeper, map tile provider decision.
-User-side: Play account type, 12 testers, Google OAuth client IDs, AWS Lightsail, signing keystore + GitHub secrets, privacy policy hosting.
+Next: install the debug APK on two phones (Gate 1: 30-minute screen-off run; Google sign-in with the debug SHA-1;
+map rendering of the hexagon layers and theme switch), then an independent review of the redesign.
+
+Open follow-ups: docs/verification/M-redesign.md "Not verified" and "Gaps", O1-C1 follow-ups, commit pubspec.lock,
+stale `deleting` accounts sweeper, map tile provider decision.
+User-side: Play account type, 12 testers, OAuth client IDs (web client set; Android client with the release SHA-1
+still needed for release builds), AWS Lightsail, signing keystore + GitHub secrets, privacy policy hosting.

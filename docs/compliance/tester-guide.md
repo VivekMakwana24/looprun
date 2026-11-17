@@ -14,15 +14,17 @@ Thanks for helping. You will install an early version of Looprun on your Android
 
 1. Open Looprun and sign in with Google.
 2. Read the location screen, tap **Agree and continue**, allow location "while using the app" and notifications.
-3. Open the map: it should centre on you (if not, tell us).
-4. Go to Run and tap Start. Run or walk a loop outdoors of **at least 600 metres in length (roughly 1 km is safer), enclosing a real block or park**, ending near where you started. Very small loops are rejected as too small.
-5. Lock the phone halfway. The Looprun notification should stay. Unlock: progress should still show.
-6. Stop the run, either with the Stop button in the notification or inside the app. Check the result screen: distance, time, cells claimed.
-7. Open the map and find your cells. Open the leaderboard. The map should update by itself when another tester takes a cell (live updates; others' changes appear after about 30 minutes, by design).
+3. Open the map (lane **1 MAP**): it should centre on you (if not, tell us). Try the four colour themes in lane **3 YOU**.
+4. Tap **START RUN** on the map. Run or walk a loop outdoors of **at least 600 metres in length (roughly 1 km is safer), enclosing a real block or park**, ending near where you started. Very small loops are rejected as too small.
+5. Lock the phone halfway. The Looprun notification should stay. Unlock: progress should still show. Do **not** swipe Looprun away from the recent-apps list during a run: that ends the recording (the next start of the app offers to finish and upload what was recorded).
+6. Stop the run, either with the Stop button in the notification or with **FINISH RUN** in the app. Check the result screen: distance, time, cells claimed.
+7. Open the map and find your cells. Open the board (lane **2 BOARD**). The map should update by itself when another tester takes a cell (live updates; others' changes appear after about 30 minutes, by design).
 8. Try **Report a cell** on the map and **Report a problem with this run** on a result screen. The reason is free text and is stored for 180 days: do not type personal details.
-9. Profile: add a home zone, try the freeze option, then end it.
+9. Lane 3 YOU: add a home zone, start rest days, then end them.
 10. Run again another day over some of the same streets.
 11. Optional, on a throwaway account: Profile > Delete account, and confirm you are signed out.
+
+Runs upload while Looprun is open; a run finished without a connection waits on the phone and goes up the next time the app is open with a connection.
 
 Please do not use fake GPS apps unless the organiser asks you to, and run safely.
 

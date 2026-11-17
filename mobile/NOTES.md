@@ -8,29 +8,56 @@ Architecture: docs/MOBILE_ARCHITECTURE.md (views + Riverpod notifier view models
 
 ## Design choices
 
-- **Cells are drawn as coloured circles at the cell centre, not polygons.** The server sends `lat`/`lng` per cell (decision D7, `Cell.lat/lng`),
-  so the app has no H3 dependency. Cells without lat/lng are skipped. Circle radius is in screen pixels. Colours: mine = green, others = orange,
-  owner hidden by privacy rules = grey. Free cells are not returned by `GET /v1/cells`. Tapping near a cell opens a small dialog with a "Report this cell" action.
-- **Live updates:** `CellRepository` loads the visible box over REST, then opens `WS /v1/live?bbox=...` (`SocketLiveService`, plain `dart:io` WebSocket, no extra package) and sends `{"type":"auth","token":...}` as the first message. `cell_changed` frames update the cache. A frame without owner is drawn grey (private) until the next REST refresh, because hidden and free cells look the same on the wire. Reconnects with backoff; close code 4401 stops retrying. The socket closes when the map tab is left.
-- **Location is read in the main isolate** with geolocator's position stream. `flutter_foreground_task` runs a service (type `location`) that only
-  keeps the process alive and shows the notification. The notification has a **Stop** button: the task handler's `onNotificationButtonPressed`
-  sends a message to the main isolate (`initCommunicationPort`, `addTaskDataCallback`), where `RunRepository.stop()` runs. Needs a device test (Gate 1). It is started only from the Run screen's Start button,
-  after location permission; the start result is checked and a failure aborts the run (row discarded).
-- **Permissions** go through `data/services/permission_service.dart` (`PermissionService`): geolocator for location, `FlutterForegroundTask.requestNotificationPermission()` for notifications. `permission_handler` is gone.
-- **Disclosure before permissions:** the go_router redirect (`appRedirect` in `lib/router.dart`) sends a signed-in user to `DisclosureScreen` until accepted. Texts are constants in `disclosure_screen.dart`
-  and match docs/compliance/location-disclosure.md. `MAP_TILE_PROVIDER` and `PRIVACY_POLICY_URL` are `--dart-define`s with placeholder defaults.
-  There is no `url_launcher` (not in the verified dependency set), so the "Privacy Policy" button shows the URL in a dialog (selectable) instead of opening it.
-- **Write-first recording (F1):** each fix is inserted into Drift first; only after the insert succeeds are the recorder (distance) and the UI updated.
-  Recorder states: idle, recording, paused, stopping, finished. `stop()` moves to `stopping` (no new fixes), the controller awaits in-flight writes,
-  then `finish()` and `markFinished`. The stored fix count (from Drift) decides whether a run is too short.
-- **Crash recovery:** `HomeScreen` asks `RunRepository.findUnfinishedRun()` (which stops a leftover service first), then offers to finish and upload (or discard) a `recording`/`paused` run, unless this process is recording right now (F9).
-  A 401 during an active run does not sign the user out (F10).
-- **Upload queue** is pure Dart; state lives in the `runs` table. Ticked every 5 s while the home screen is open and after a run finishes. Retries network errors,
-  408/425/429 and 5xx with exponential backoff (2 s doubling, 5 min cap, 12 attempts); other 4xx fail at once. Unexpected non-API errors fail only that job (F4). Polls every 3 s while `processing`.
-- **Home zones** are also kept in shared_preferences because the API only offers "replace the list".
-- **Reports:** `POST /v1/reports` via `ApiService.report`; "Report a problem with this run" on the result screen, "Report this cell" on the map.
-- Not done: Play Integrity, downsampling above 20000 fixes, iOS, `pubspec.lock` commit (after first green CI), the production tile provider, a visible per-run history screen.
-- Dependency added in phase 2: `go_router ^17.0.0` (18.x needs material_ui/cupertino_ui). Everything else is unchanged.
+- **Visual design: "Night Track"** (docs/design/*.dc.html, redesign report docs/verification/M-redesign.md). Four themes
+  (night default, tartan, dawn = light, trail). Every colour is a token of `LooprunColors` (a `ThemeExtension` in
+  `lib/core/theme.dart`, values copied from the mockups' CSS); widgets read `context.lr`. `architecture_test` fails on a
+  `Color(0x..)` or `Colors.*` (other than transparent) under `lib/ui/`. The chosen theme is kept in shared_preferences
+  (`ThemeRepository`, `ThemeViewModel`). Fonts Barlow / Barlow Condensed are bundled (pubspec `fonts:`), never downloaded.
+- **Navigation:** go_router `ShellRoute` with the lane bar (1 MAP `/home`, 2 BOARD `/board`, 3 YOU `/you`). The live run
+  (`/home/record`) and a result (`/home/run/<id>`) are children of `/home` drawn on the root navigator, so a finished run
+  `go`es to its result and back leads to the map. `HomeShell` does crash recovery, keeps the upload ticker alive on all
+  three lanes and opens the result when a run finishes (also after the notification's Stop).
+- **Cells are hexagons** from `Cell.boundary` (D10): one GeoJSON source, one fill layer per kind (yours, fading at 0.4,
+  others at 0.88, private with a dashed line layer), a circle layer fallback for cells without a boundary
+  (`ui/map/cell_geojson.dart`, `cell_map.dart`). One `setGeoJsonSource` per change (review F17). Fading = own cell with
+  `strength < 0.5`; the notice counts those in view and is hidden at zero; no day estimates are shown.
+- **Map style:** `MAP_STYLE_URL` empty (default) = built-in style with only a background layer in the theme's `map`
+  colour: no tiles, no request to any map server. The map view is rebuilt (keyed by theme) when the theme changes,
+  keeping the camera. The phone's position is drawn as a dot only after it was read (map open, recentre), never tracked.
+- **Numbers shown are the server's:** cells held / rank this week from leaderboard `me`; rest-day quota from `GET /me`;
+  result splits from the run status. Unknown = `--` or "Not yet", never 0.
+- **Loop gap** (`domain/recorder/loop_gap.dart`, pure Dart): distance from the newest point to the nearest earlier point
+  that is at least 150 m back along the path and that the path left and came back to (path length >= 2x the straight
+  line; the start always counts), "closed" within 80 m or when the path crosses itself (segments >= 150 m of path apart).
+  The path is thinned (8 m spacing, at most 400 points) before drawing. A hint only; the server decides the loops.
+- **Live updates:** `CellRepository` loads the visible box over REST, then opens `WS /v1/live?bbox=...` (auth as first
+  message). Frames update the cache (boundary and own strength included). Reconnects with backoff, at most 8 in a row
+  until the next camera stop (F14); a 4401 is remembered for that token (F16). Closes when the map lane is left.
+- **Location is read in the main isolate** with geolocator's position stream; `flutter_foreground_task` only keeps the
+  process alive and shows the notification with a **Stop** button (sent to the main isolate, `RunRepository.stop()`).
+  If the GPS stream ends it is reopened after 2 s, at most 5 times in a row. Paused runs say "Paused" in the
+  notification (F3). With notifications off the run screen says the notification is hidden (F4).
+- **Permissions** via `PermissionService` (geolocator; notifications via flutter_foreground_task).
+- **Disclosure before permissions:** the router redirect sends a signed-in user to `DisclosureScreen` until accepted.
+  Strings are constants matching docs/compliance/location-disclosure.md; `disclosure_test` checks each one is in that file.
+  Headings are capitals by style only (`CapsLabel`).
+- **Privacy Policy links** open the browser (`url_launcher`, `LinkService`); if that fails or the URL is the placeholder,
+  the address is shown in a dialog.
+- **Write-first recording (F1):** each fix is inserted into Drift first; only then do recorder, distance and UI change.
+  `stop()` -> `stopping` (no new fixes) -> teardown (cancel futures not awaited) -> wait at most 5 s for in-flight writes
+  -> `finish` -> `markFinished`. Any failure on the way still leaves `stopping` (F8).
+- **Crash recovery:** the shell asks `RunRepository.findUnfinishedRun()`; a Start pressed meanwhile waits for it (F5).
+  Sign-out and account deletion are refused while a run is recorded (F7). A 401 during a run does not sign out.
+- **Upload queue:** pure Dart, state in the `runs` table, ticked every 5 s while the main frame is open. No answer from
+  the server (offline) is retried for ever with the delay capped at 5 min (F9); server errors 408/425/429/5xx give up
+  after 12; other 4xx at once. Runs over 20000 fixes are thinned evenly before upload (F10).
+- **Home zones:** the server list from `GET /me` replaces the phone copy when the profile opens; changes send the full list.
+- **Login:** `GOOGLE_SERVER_CLIENT_ID` defaults to the dev project's Web client. Errors are sentences, never platform
+  text (`googleSignInErrorMessage`, `signInErrorText`); debug builds add the API address to "Can't reach the server".
+  `DEV_AUTH` defaults to on in debug builds and is forced off in release builds.
+- **Release guard (F19):** a release build with placeholder or non-https settings shows a configuration error screen.
+- Not done: Play Integrity, iOS, `pubspec.lock`, production tile provider, run history screen, app lifecycle pause of the
+  live socket (F15), per-user disclosure flag (F21), Drift-backed store tests (F25).
 
 ## Dependency set
 
@@ -48,7 +75,7 @@ foreground-task 11 `init`/`startService`/`ServiceRequestFailure`/`requestNotific
 3. **ServiceRequestFailure.error** field name in `AndroidRunService.start` (read from source by the verifier for 11.x; not compiled).
 4. `ForegroundServiceTypes.location` constant and `serviceTypes:` parameter on `startService` (11.x).
 5. `flutter_lints 6` may report new lints; analyze is run with `--no-fatal-infos` but warnings fail.
-6. `onStyleLoadedCallback: _refreshCells` passes a `Future<void> Function()` where `void Function()` is expected (legal in Dart).
+6. `addGeoJsonSource` / `addFillLayer(filter:)` / `addLineLayer` / `setGeoJsonSource` of maplibre_gl 0.2x compile; their runtime behaviour (expression filters, dash arrays, re-adding layers after a style reload) is not verified on a device.
 7. Widget tests import `app.dart`, which pulls in `maplibre_gl` and Drift; they only need these to compile on the VM (UNKNOWN, plausible).
 8. Manifest keeps `tools:replace="android:foregroundServiceType"` (harmless; plugin declares no service of its own).
-9. The disclosure "Privacy Policy" link only shows the URL (no url_launcher).
+9. `url_launcher` 6.3 `launchUrl(..., mode: LaunchMode.externalApplication)` (compiled in CI; not run on a device).
