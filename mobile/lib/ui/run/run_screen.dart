@@ -136,8 +136,16 @@ class _Live extends ConsumerWidget {
           child: Row(
             children: [
               _StatusChip(status: run.status),
-              const Spacer(),
-              _GpsAccuracy(health: run.health, accuracyM: run.accuracyM),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: _GpsAccuracy(health: run.health, accuracyM: run.accuracyM),
+                  ),
+                ),
+              ),
             ],
           ),
         ),

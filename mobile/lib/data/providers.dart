@@ -111,7 +111,8 @@ final uploadQueueProvider = Provider<UploadQueue>((ref) {
     if (session == null) return;
     ref.read(sessionExpiryPolicyProvider).clear();
     queue.resumeAfterAuth();
-    unawaited(ref.read(runRepositoryProvider).tickUploads());
+    // queue.tick() directly: reading runRepositoryProvider here would be a cycle (it watches this provider).
+    unawaited(queue.tick().then<void>((_) {}, onError: (Object _) {}));
   });
   ref.onDispose(sub.cancel);
   return queue;

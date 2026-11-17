@@ -187,9 +187,14 @@ class _TopStats extends ConsumerWidget {
             children: [
               Icon(Icons.refresh, size: 26, color: c.accentText),
               const SizedBox(width: 8),
-              Text('LOOPRUN', style: LrText.display(24, color: c.text, tracking: 0.04, height: 1)),
-              const Spacer(),
-              if (week != null) WeekChip(label: week),
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text('LOOPRUN', style: LrText.display(24, color: c.text, tracking: 0.04, height: 1)),
+                ),
+              ),
+              if (week != null) ...[const SizedBox(width: 8), WeekChip(label: week)],
             ],
           ),
           const SizedBox(height: 14),
@@ -240,7 +245,8 @@ class _Legend extends StatelessWidget {
           height: 10,
           decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
         );
-    return Row(
+    return Wrap(
+      runSpacing: 6,
       children: [
         item(solid(c.accent), 'Yours'),
         item(solid(c.rival), 'Others'),

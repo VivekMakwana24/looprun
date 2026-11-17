@@ -52,6 +52,7 @@ void main() {
     final api = FakeApiService()..authError = const ApiException(null, 'SocketException: refused');
     await tester.pumpWidget(_app(devAuth: false, api: api));
     await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('google_sign_in_button')));
     await tester.tap(find.byKey(const Key('google_sign_in_button')));
     await tester.pump();
     await tester.pump();

@@ -156,6 +156,7 @@ void main() {
       expect(c.read(themeViewModelProvider), AppThemeId.night);
       await tester.tap(find.byKey(const Key('theme_swatch_dawn')));
       await pumpABit(tester);
+      await tester.pump(const Duration(milliseconds: 500)); // MaterialApp animates the theme change
       expect(c.read(themeViewModelProvider), AppThemeId.dawn);
       expect(Theme.of(tester.element(find.text('YOU'))).extension<LooprunColors>(), LooprunColors.dawn);
     });
@@ -272,7 +273,6 @@ void main() {
     testWidgets('recording, paused and the loop gap', (tester) async {
       final h = Harness();
       final semantics = tester.ensureSemantics();
-      addTearDown(semantics.dispose);
       final c = await pumpScreen(tester, h, const RunScreen());
       await c.read(runViewModelProvider.notifier).start();
       await pumpABit(tester);
@@ -296,6 +296,7 @@ void main() {
       await c.read(runViewModelProvider.notifier).stop();
       await pumpABit(tester);
       expect(c.read(runViewModelProvider).status, RecorderStatus.finished);
+      semantics.dispose();
     });
 
     testWidgets('without a run the screen explains and leads back', (tester) async {

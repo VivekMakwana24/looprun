@@ -65,7 +65,6 @@ void main() {
 
   testWidgets('every text on the screen is exactly the text of the compliance document', (tester) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
     final doc = File('../docs/compliance/location-disclosure.md').readAsStringSync();
     for (final s in [
       disclosureTitle,
@@ -104,6 +103,7 @@ void main() {
     expect(find.text(disclosureAgreeLabel), findsOneWidget);
     expect(find.text(disclosureDeclineLabel), findsOneWidget);
     expect(find.byKey(const Key('disclosure_decline_button')), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('the Privacy Policy link opens the browser before any permission prompt', (tester) async {

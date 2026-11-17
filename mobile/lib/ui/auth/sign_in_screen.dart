@@ -126,8 +126,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                               else
                                 Icon(Icons.login, size: 22, color: c.onPaper),
                               const SizedBox(width: 12),
-                              Text('Sign in with Google',
-                                  style: LrText.body(18, weight: FontWeight.w600, color: c.onPaper)),
+                              Flexible(
+                                child: Text('Sign in with Google',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: LrText.body(18, weight: FontWeight.w600, color: c.onPaper)),
+                              ),
                             ],
                           ),
                         ),
