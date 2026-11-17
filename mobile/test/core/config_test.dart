@@ -40,7 +40,7 @@ void main() {
     });
   });
 
-  test('the app's default Google web client is the one the dev server verifies against', () {
+  test('the default Google web client of the app is the one the dev server verifies against', () {
     final compose = File('../docker-compose.yml').readAsStringSync();
     final m = RegExp(r'LOOPRUN_GOOGLE_CLIENT_ID:\s*(\S+)').firstMatch(compose);
     expect(m, isNotNull, reason: 'docker-compose.yml no longer sets LOOPRUN_GOOGLE_CLIENT_ID');
