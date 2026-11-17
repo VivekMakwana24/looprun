@@ -198,7 +198,9 @@ class UploadQueue {
       return;
     }
     final failures = job.attempts + 1;
-    if (policy.shouldRetry(e.statusCode, failures)) {
+    // An unreadable answer is retried like a server error (it gives up after maxAttempts), not like "offline".
+    final code = e.malformed ? 500 : e.statusCode;
+    if (policy.shouldRetry(code, failures)) {
       await store.saveJob(job.copyWith(
         attempts: failures,
         nextAttemptAt: now + policy.delayFor(failures).inMilliseconds,

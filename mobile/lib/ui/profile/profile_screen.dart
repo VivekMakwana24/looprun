@@ -183,7 +183,7 @@ class ProfileScreen extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       child: LrStat(
                         value: standing.rank == null ? noValue : '#${standing.rank}',
-                        label: 'THIS WEEK',
+                        label: 'YOUR RANK',
                         size: 44,
                       ),
                     ),

@@ -30,6 +30,7 @@ const String signInNoServerText = "Can't reach the server. Check your connection
 String signInErrorText(Object error, {String? apiBaseUrl, bool dev = false}) {
   if (error is AppException) return error.message;
   if (error is ApiException) {
+    if (error.malformed) return 'The server sent an unexpected answer. Please try again later.';
     if (error.isNetwork) {
       return apiBaseUrl == null ? signInNoServerText : '$signInNoServerText\nServer: $apiBaseUrl';
     }

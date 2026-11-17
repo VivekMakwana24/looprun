@@ -8,7 +8,7 @@ import '../auth/auth_view_model.dart';
 import '../core/widgets.dart';
 import 'leaderboard_view_model.dart';
 
-/// Lane 2: THE BOARD, cells held this week.
+/// Lane 2: THE BOARD, cells held right now (that is what the server counts; see review follow-up 2).
 class LeaderboardScreen extends ConsumerWidget {
   const LeaderboardScreen({super.key});
 
@@ -18,7 +18,6 @@ class LeaderboardScreen extends ConsumerWidget {
     final data = ref.watch(weeklyLeaderboardProvider);
     final myId = ref.watch(authViewModelProvider.select((s) => s.user?.id));
     final board = data.valueOrNull;
-    final week = board == null ? null : formatWeekLabel(board.week);
     final offline = data.hasError && data.error is ApiException && (data.error as ApiException).isNetwork;
 
     Widget body;
@@ -71,7 +70,7 @@ class LeaderboardScreen extends ConsumerWidget {
           if (view.rows.isEmpty)
             _pad(const LrMessage(
               key: Key('board_empty'),
-              title: 'Nobody holds cells this week yet',
+              title: 'Nobody holds any cells yet',
               text: 'Run a closed loop and take lane 1.',
             ))
           else
@@ -122,18 +121,17 @@ class LeaderboardScreen extends ConsumerWidget {
                 Expanded(
                   child: Text('THE BOARD', style: LrText.display(60, color: c.text, tracking: 0.01, height: 0.88)),
                 ),
-                if (week != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(week, style: LrText.label(14, color: c.accentText)),
-                        const SizedBox(height: 2),
-                        Text('Resets Monday', style: LrText.body(13, color: c.muted)),
-                      ],
-                    ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('RIGHT NOW', style: LrText.label(14, color: c.accentText)),
+                      const SizedBox(height: 2),
+                      Text('Cells held now', key: const Key('board_scope'), style: LrText.body(13, color: c.muted)),
+                    ],
                   ),
+                ),
               ],
             )),
             const SizedBox(height: 14),

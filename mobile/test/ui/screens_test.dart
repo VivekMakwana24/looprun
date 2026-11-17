@@ -61,7 +61,8 @@ void main() {
       await pumpABit(tester);
       expect(find.text('128'), findsOneWidget);
       expect(find.text('#3'), findsOneWidget);
-      expect(find.text('WEEK 47'), findsOneWidget);
+      expect(find.text('YOUR RANK'), findsOneWidget);
+      expect(find.text('THIS WEEK'), findsNothing);
       expect(find.byKey(const Key('fading_notice')), findsNothing, reason: 'no cells loaded yet');
 
       await c.read(mapViewModelProvider.notifier).onCameraIdle(south: 49.99, west: 8.69, north: 50.01, east: 8.71);
@@ -125,7 +126,8 @@ void main() {
       await pumpScreen(tester, h, const LeaderboardScreen());
       await pumpABit(tester);
       expect(find.text('THE BOARD'), findsOneWidget);
-      expect(find.text('WEEK 47'), findsOneWidget);
+      expect(find.text('RIGHT NOW'), findsOneWidget);
+      expect(find.text('Resets Monday'), findsNothing, reason: 'the server does not reset weekly');
       expect(find.text('Asha'), findsOneWidget);
       expect(find.text('You'), findsOneWidget);
       expect(find.text('Vivek'), findsNothing);

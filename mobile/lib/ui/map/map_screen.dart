@@ -19,7 +19,7 @@ class _Signal extends ChangeNotifier {
   void fire() => notifyListeners();
 }
 
-/// Lane 1: the map with the cells, the week's numbers and the start button.
+/// Lane 1: the map with the cells, my numbers and the start button.
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
@@ -167,7 +167,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 }
 
-/// Logo, week chip, the two numbers and the legend.
+/// Logo, the two numbers and the legend. The server counts the cells held right now (the ISO week in its
+/// answer is only a cache key), so there is no week chip and nothing claims a weekly reset (review follow-up 2).
 class _TopStats extends ConsumerWidget {
   const _TopStats();
 
@@ -175,7 +176,6 @@ class _TopStats extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.lr;
     final standing = ref.watch(myStandingProvider);
-    final week = standing.week == null ? null : formatWeekLabel(standing.week!);
     final rank = standing.rank;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
@@ -194,7 +194,6 @@ class _TopStats extends ConsumerWidget {
                   child: Text('LOOPRUN', style: LrText.display(24, color: c.text, tracking: 0.04, height: 1)),
                 ),
               ),
-              if (week != null) ...[const SizedBox(width: 8), WeekChip(label: week)],
             ],
           ),
           const SizedBox(height: 14),
@@ -211,7 +210,7 @@ class _TopStats extends ConsumerWidget {
               LrStat(
                 key: const Key('stat_rank'),
                 value: rank == null ? noValue : '#$rank',
-                label: 'THIS WEEK',
+                label: 'YOUR RANK',
               ),
             ],
           ),

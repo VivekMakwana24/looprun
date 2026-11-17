@@ -12,13 +12,12 @@ import 'home_view_model.dart';
 /// The frame around the three lanes (map, board, you): the lane bar, crash recovery, the upload
 /// ticker, and opening the result when a run finished (also after the notification's Stop button).
 class HomeShell extends ConsumerStatefulWidget {
-  const HomeShell({super.key, required this.lane, required this.child});
+  const HomeShell({super.key, required this.lane, required this.onSelectLane, required this.child});
 
   /// 0 map, 1 board, 2 you.
   final int lane;
+  final ValueChanged<int> onSelectLane;
   final Widget child;
-
-  static const List<String> _paths = [homePath, boardPath, profilePath];
 
   @override
   ConsumerState<HomeShell> createState() => _HomeShellState();
@@ -85,7 +84,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       bottomNavigationBar: LaneNav(
         current: widget.lane,
         onSelect: (i) {
-          if (i != widget.lane) context.go(HomeShell._paths[i]);
+          // Opening the board asks the server again (review B1); the other lanes keep their state.
+          if (i == 1) ref.invalidate(weeklyLeaderboardProvider);
+          if (i != widget.lane) widget.onSelectLane(i);
         },
       ),
     );

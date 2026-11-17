@@ -9,6 +9,9 @@ import '../upload/upload_queue.dart';
 /// Text of an [ApiException] without a status code (no answer from the server).
 const String networkErrorMessage = "Can't reach the server. Check your connection.";
 
+/// Text of an [ApiException.malformed]: the server answered with something the app cannot read.
+const String unexpectedAnswerMessage = 'The server sent an answer this version of Looprun cannot read.';
+
 abstract class ApiService implements RunsApi {
   Future<Session> authGoogle(String idToken);
 
@@ -64,15 +67,16 @@ class DioApiService implements ApiService {
     try {
       return await call();
     } on DioException catch (e) {
+      if (e.error is FormatException) throw const ApiException.malformed(unexpectedAnswerMessage);
       final code = e.response?.statusCode;
       if (code == 401) _onUnauthorized?.call();
       throw ApiException(code, _messageOf(e));
     } on ApiException {
       rethrow;
-    } on TypeError catch (e) {
-      throw ApiException(null, 'Unexpected response: $e');
-    } on FormatException catch (e) {
-      throw ApiException(null, 'Unexpected response: ${e.message}');
+    } on TypeError {
+      throw const ApiException.malformed(unexpectedAnswerMessage);
+    } on FormatException {
+      throw const ApiException.malformed(unexpectedAnswerMessage);
     }
   }
 

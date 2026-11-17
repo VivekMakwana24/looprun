@@ -39,17 +39,6 @@ String? appRedirect({
   return null;
 }
 
-/// Lane index of a location (0 map, 1 board, 2 you).
-int laneOf(String location) {
-  if (location.startsWith(boardPath)) return 1;
-  if (location.startsWith(profilePath)) return 2;
-  return 0;
-}
-
-const List<String> lanePaths = [homePath, boardPath, profilePath];
-
-Page<void> _plain(GoRouterState state, Widget child) => NoTransitionPage<void>(key: state.pageKey, child: child);
-
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier<int>(0);
   ref.listen<AuthState>(authViewModelProvider, (previous, next) => refresh.value++);
@@ -69,27 +58,39 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: splashPath, builder: (context, state) => const _Splash()),
       GoRoute(path: signInPath, builder: (context, state) => const SignInScreen()),
       GoRoute(path: disclosurePath, builder: (context, state) => const DisclosureScreen()),
-      ShellRoute(
-        builder: (context, state, child) => HomeShell(lane: laneOf(state.matchedLocation), child: child),
-        routes: [
-          GoRoute(
-            path: homePath,
-            pageBuilder: (context, state) => _plain(state, const MapScreen()),
-            routes: [
-              GoRoute(
-                path: 'record',
-                parentNavigatorKey: rootKey,
-                builder: (context, state) => const RunScreen(),
-              ),
-              GoRoute(
-                path: 'run/:id',
-                parentNavigatorKey: rootKey,
-                builder: (context, state) => RunResultScreen(runId: state.pathParameters['id']!),
-              ),
-            ],
-          ),
-          GoRoute(path: boardPath, pageBuilder: (context, state) => _plain(state, const LeaderboardScreen())),
-          GoRoute(path: profilePath, pageBuilder: (context, state) => _plain(state, const ProfileScreen())),
+      // The three lanes keep their state (review follow-up 3): the map is not rebuilt on a lane switch, so
+      // the camera stays and no new GPS read happens.
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, shell) => HomeShell(
+          lane: shell.currentIndex,
+          onSelectLane: (i) => shell.goBranch(i, initialLocation: i == shell.currentIndex),
+          child: shell,
+        ),
+        branches: [
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: homePath,
+              builder: (context, state) => const MapScreen(),
+              routes: [
+                GoRoute(
+                  path: 'record',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => const RunScreen(),
+                ),
+                GoRoute(
+                  path: 'run/:id',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => RunResultScreen(runId: state.pathParameters['id']!),
+                ),
+              ],
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: boardPath, builder: (context, state) => const LeaderboardScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: profilePath, builder: (context, state) => const ProfileScreen()),
+          ]),
         ],
       ),
     ],
