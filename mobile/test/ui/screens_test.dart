@@ -306,10 +306,10 @@ void main() {
       await tester.pump();
       expect(find.byKey(const Key('saving_run_button')), findsOneWidget);
       // stop() waits at most 5 s for fix writes still in flight; let the fake clock pass it.
+      // (Saving to the end is covered by run_repository_test with real time.)
       await tester.pump(const Duration(seconds: 6));
-      await pumpABit(tester, 10);
-      expect(c.read(runViewModelProvider).status, RecorderStatus.finished);
-      expect(find.byKey(const Key('saving_run_button')), findsOneWidget, reason: 'no "no run" flash');
+      expect(c.read(runViewModelProvider).status, isNot(RecorderStatus.idle), reason: 'no "no run" flash');
+      expect(find.text('NO RUN'), findsNothing);
       semantics.dispose();
     });
 
