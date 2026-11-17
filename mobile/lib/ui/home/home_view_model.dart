@@ -3,16 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
 
-/// View model of the home screen: the selected tab (state) and crash recovery.
-class HomeViewModel extends Notifier<int> {
-  static const int mapTab = 0;
-  static const int runTab = 1;
-  static const int profileTab = 2;
-
+/// View model of the home frame: crash recovery. (The selected lane is the route.)
+class HomeViewModel extends Notifier<void> {
   @override
-  int build() => runTab;
-
-  void select(int index) => state = index;
+  void build() {}
 
   /// A run left unfinished by a previous process, or null.
   Future<RunSummary?> findUnfinishedRun() => ref.read(runRepositoryProvider).findUnfinishedRun();
@@ -24,9 +18,9 @@ class HomeViewModel extends Notifier<int> {
   Future<void> discard(String runId) => ref.read(runRepositoryProvider).discardRun(runId);
 }
 
-final homeViewModelProvider = NotifierProvider<HomeViewModel, int>(HomeViewModel.new);
+final homeViewModelProvider = NotifierProvider<HomeViewModel, void>(HomeViewModel.new);
 
-/// Keeps uploads of finished runs going while the home screen is open.
+/// Keeps uploads of finished runs going while the app's main frame is open.
 final uploadSyncProvider = Provider<void>((ref) {
   ref.watch(uploadTickerProvider);
 });

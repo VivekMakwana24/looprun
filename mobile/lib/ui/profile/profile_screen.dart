@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_view_model.dart';
-import '../leaderboard/leaderboard_sheet.dart';
 import 'profile_view_model.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -111,11 +110,6 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
         const Divider(height: 32),
-        ListTile(
-          leading: const Icon(Icons.emoji_events_outlined),
-          title: const Text('Weekly leaderboard'),
-          onTap: () => showLeaderboardSheet(context),
-        ),
         ListTile(
           leading: const Icon(Icons.logout),
           title: const Text('Sign out'),

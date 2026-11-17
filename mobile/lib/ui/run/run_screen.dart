@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../core/routes.dart';
 import '../../core/theme.dart';
 import '../../data/models/models.dart';
 import '../../data/models/recording_snapshot.dart';
@@ -20,7 +21,7 @@ class RunScreen extends ConsumerWidget {
     final controller = ref.read(runViewModelProvider.notifier);
     final theme = Theme.of(context);
 
-    return Padding(
+    return Scaffold(body: SafeArea(child: Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -63,7 +64,7 @@ class RunScreen extends ConsumerWidget {
           ],
         ],
       ),
-    );
+    )));
   }
 }
 
@@ -181,7 +182,7 @@ class _RecentRuns extends ConsumerWidget {
                   .toString()
                   .substring(0, 16)),
               subtitle: Text(_summary(r)),
-              onTap: () => context.push('/run/${r.id}'),
+              onTap: () => context.push(runResultPath(r.id)),
             ),
         ],
       ),

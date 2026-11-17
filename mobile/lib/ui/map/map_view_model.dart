@@ -205,3 +205,7 @@ class MapViewModel extends AutoDisposeNotifier<MapState> {
 
 final mapViewModelProvider =
     NotifierProvider.autoDispose<MapViewModel, MapState>(MapViewModel.new);
+
+/// Whether the map screen builds the real MapLibre view. Widget tests turn it off: a platform view
+/// cannot be created in a test, and everything around the map is what they check.
+final mapCanvasEnabledProvider = Provider<bool>((ref) => true);

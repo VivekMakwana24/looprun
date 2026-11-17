@@ -2,20 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../map/map_screen.dart';
-import '../profile/profile_screen.dart';
-import '../run/run_screen.dart';
+import '../../core/routes.dart';
+import '../../core/theme.dart';
+import '../core/widgets.dart';
 import '../run/run_view_model.dart';
 import 'home_view_model.dart';
 
-class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+/// The frame around the three lanes (map, board, you): the lane bar, crash recovery, the upload
+/// ticker, and opening the result when a run finished (also after the notification's Stop button).
+class HomeShell extends ConsumerStatefulWidget {
+  const HomeShell({super.key, required this.lane, required this.child});
+
+  /// 0 map, 1 board, 2 you.
+  final int lane;
+  final Widget child;
+
+  static const List<String> _paths = [homePath, boardPath, profilePath];
 
   @override
-  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
@@ -48,7 +56,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final queued = await vm.finishRecovered(run.id);
       if (!mounted) return;
       if (queued) {
-        context.push('/run/${run.id}');
+        context.go(runResultPath(run.id));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('That run was too short to keep.')),
@@ -62,27 +70,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     ref.watch(uploadSyncProvider);
-
-    // Open the result when a run finished, whichever tab is showing (also after the notification's Stop).
     ref.listen<String?>(runViewModelProvider.select((s) => s.finishedRunId), (previous, next) {
       if (next != null && next != previous) {
         ref.read(runViewModelProvider.notifier).acknowledge();
-        context.push('/run/$next');
+        // Replaces the live run screen (if open) with the result; back leads to the map.
+        context.go(runResultPath(next));
       }
     });
-
-    final index = ref.watch(homeViewModelProvider);
-    const pages = <Widget>[MapScreen(), RunScreen(), ProfileScreen()];
     return Scaffold(
-      body: SafeArea(child: pages[index]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: ref.read(homeViewModelProvider.notifier).select,
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
-          NavigationDestination(icon: Icon(Icons.directions_run), label: 'Run'),
-          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
-        ],
+      backgroundColor: context.lr.bg,
+      body: widget.child,
+      bottomNavigationBar: LaneNav(
+        current: widget.lane,
+        onSelect: (i) {
+          if (i != widget.lane) context.go(HomeShell._paths[i]);
+        },
       ),
     );
   }
