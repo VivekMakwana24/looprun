@@ -447,3 +447,48 @@ Future<void> showPrivacyPolicyFallback(BuildContext context, String url) {
     ),
   );
 }
+
+/// A dashed rounded outline (the "Private" look: legend swatch, home-zone ring).
+class DashedBorderPainter extends CustomPainter {
+  DashedBorderPainter({
+    required this.color,
+    this.radius = 3,
+    this.strokeWidth = 1.5,
+    this.dash = 2.5,
+    this.circle = false,
+  });
+
+  final Color color;
+  final double radius;
+  final double strokeWidth;
+  final double dash;
+  final bool circle;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = (Offset.zero & size).deflate(strokeWidth / 2);
+    final path = Path();
+    if (circle) {
+      path.addOval(rect);
+    } else {
+      path.addRRect(RRect.fromRectAndRadius(rect, Radius.circular(radius)));
+    }
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    for (final metric in path.computeMetrics()) {
+      var d = 0.0;
+      while (d < metric.length) {
+        final end = d + dash < metric.length ? d + dash : metric.length;
+        canvas.drawPath(metric.extractPath(d, end), paint);
+        d += dash * 2;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant DashedBorderPainter old) =>
+      old.color != color || old.radius != radius || old.strokeWidth != strokeWidth || old.circle != circle;
+}
+
