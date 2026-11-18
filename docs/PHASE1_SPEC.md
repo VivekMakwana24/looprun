@@ -64,7 +64,7 @@ Caps (409 with the named code): following 500 (`follow_limit`), blocks 500 (`blo
 | `notifications` | deterministic, see 7 | user_id, type, actor_id, run_id, comment_id, comment_preview, created_at, visible_at, read, expire_at | (user_id, visible_at -1, _id -1); (user_id, read, visible_at); (actor_id); TTL `expire_at` | 60 days (TTL) |
 | `reports` (existing) | ObjectId | + target_owner_id, snapshot, state in {open, hidden, dismissed}, resolved_at | + (state, created_at); unique partial (reporter_id, kind, target_id) where kind in {user, comment, run_card}; existing TTL | 180 days (unchanged) |
 | `moderation_log` | ObjectId | at, admin, action, target_kind, target_id, report_ids | TTL 365 days | 365 days |
-| `users` (existing) | | + name_lower, name_hidden (bool), renamed_at list not stored (rate limit in Redis) | + (name_lower) | with the account |
+| `users` (existing) | | + name_lower, name_hidden (bool) | + (name_lower) | with the account |
 | `runs` (existing) | | + claimed_cells, hidden | + (user_id, status, processed_at -1, _id -1); (user_id, started_at -1, _id -1) | with the account |
 
 Migration (one-off script `server/scripts/backfill_social.py`, idempotent): set `users.name_lower`, `users.name_hidden=false`; create indexes. Existing runs stay as described in 0.4.6.
