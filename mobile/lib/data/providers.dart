@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/config.dart';
 import 'auth/session_expiry_policy.dart';
+import 'auth/session_holder.dart';
 import 'db/app_database.dart';
 import 'db/connection.dart';
 import 'db/drift_run_store.dart';
@@ -83,10 +84,15 @@ final uploadStoreProvider = Provider<UploadStore>(
   (ref) => DriftUploadStore(ref.watch(appDatabaseProvider), () => _currentUserId(ref)),
 );
 
+/// The access token shared by the auth repository (writes) and the API client (reads). See [SessionHolder].
+final sessionHolderProvider = Provider<SessionHolder>((ref) => SessionHolder());
+
 final Provider<ApiService> apiServiceProvider = Provider<ApiService>((ref) {
   return DioApiService(
     baseUrl: AppConfig.apiBaseUrl,
-    tokenProvider: () => ref.read(authRepositoryProvider).token,
+    // Never ref.read(authRepositoryProvider) here: that provider is built from this one, and Riverpod
+    // throws CircularDependencyError on such a read in debug builds (every request failed).
+    tokenProvider: () => ref.read(sessionHolderProvider).token,
     onUnauthorized: () => ref.read(sessionExpiryPolicyProvider).onUnauthorized(),
   );
 });
@@ -125,6 +131,7 @@ final Provider<AuthRepository> authRepositoryProvider = Provider<AuthRepository>
     api: ref.watch(apiServiceProvider),
     tokens: ref.watch(tokenStoreProvider),
     google: ref.watch(googleAuthServiceProvider),
+    holder: ref.watch(sessionHolderProvider),
   );
   ref.onDispose(repo.dispose);
   return repo;

@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, visibleForTesting;
 
 import '../models/api_exception.dart';
 import '../models/models.dart';
@@ -42,6 +42,7 @@ class DioApiService implements ApiService {
     void Function()? onUnauthorized,
     Dio? dio,
   })  : _onUnauthorized = onUnauthorized,
+        _tokenProvider = tokenProvider,
         _dio = dio ??
             Dio(BaseOptions(
               baseUrl: '$baseUrl/v1',
@@ -63,6 +64,11 @@ class DioApiService implements ApiService {
 
   final Dio _dio;
   final void Function()? _onUnauthorized;
+  final String? Function() _tokenProvider;
+
+  /// The token the next request would carry. For the provider-graph test only.
+  @visibleForTesting
+  String? debugCurrentToken() => _tokenProvider();
 
   Future<T> _guard<T>(Future<T> Function() call) async {
     try {

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../auth/session_holder.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/google_auth_service.dart';
@@ -12,10 +13,13 @@ class AuthRepository {
     required ApiService api,
     required TokenStore tokens,
     required GoogleAuthService google,
+    SessionHolder? holder,
   })  : _api = api,
         _tokens = tokens,
-        _google = google;
+        _google = google,
+        _holder = holder;
 
+  final SessionHolder? _holder;
   final ApiService _api;
   final TokenStore _tokens;
   final GoogleAuthService _google;
@@ -32,6 +36,7 @@ class AuthRepository {
 
   void _set(AuthSession? session) {
     _current = session;
+    _holder?.token = session?.token;
     if (!_changes.isClosed) _changes.add(session);
   }
 
