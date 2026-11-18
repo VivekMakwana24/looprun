@@ -21,7 +21,6 @@ import 'package:looprun/ui/people/user_list_screen.dart';
 import 'package:looprun/ui/people/user_search_screen.dart';
 import 'package:looprun/ui/profile/profile_screen.dart';
 
-import '../fakes/fakes.dart';
 import '../fakes/social_fixtures.dart';
 import 'screen_harness.dart';
 
