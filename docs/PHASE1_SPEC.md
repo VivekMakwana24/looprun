@@ -316,3 +316,11 @@ Play Data safety (`docs/compliance/data-safety-answers.md`)
 3. Feed/history/cards, kudos/comments.
 4. Notifications, battles routes.
 5. Reports/moderation CLI, deletion changes, rate limits, privacy checklist.
+
+## Change log (implementation notes and additive contract corrections)
+
+- 2026-11-18, contract: every phase 1a read route (`GET /runs`, `/users/{id}`, `/me/followers`, `/me/following`, `/me/rivals`, `/feed`, `/runs/{id}/comments`, `/battles/*`, `/notifications*`, `/me/blocks`) now lists `429`. The spec (0.3) already rate limits them (`social_read`, 120 per minute) but the contract did not say so. Additive.
+- 2026-11-18, 1.0: the 2..30 character rule and the profanity hook are applied to Google names in `auth.upsert_user` only for `google:` subjects. Dev logins (`LOOPRUN_DEV_AUTH`, tests) keep the typed name, because the existing tests use one-letter dev names.
+- 2026-11-18, 1.0: the rename limit (`rename`, 5 per 24 h) counts every `PATCH /me` attempt that reaches the route, accepted or rejected, so the profanity filter cannot be probed without limit.
+- 2026-11-18, 0.4: `k_ok` counts the taker among the users around the cell (after the claim they hold power there, exactly as `GET /cells` will see it). The battle row is planned with the claim (`outcome.event`) and written by `_apply`, so `_apply`'s signature is unchanged.
+- 2026-11-18, 0.5: `admin_enabled` (default true) only gates the moderation CLI; the CLI has no network surface.

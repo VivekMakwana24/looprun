@@ -16,6 +16,8 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pymongo.errors import DuplicateKeyError
 
+from . import profanity
+from .profanity import name_key
 from .resources import Resources
 
 log = logging.getLogger("looprun.auth")
@@ -112,14 +114,28 @@ async def identify(res: Resources, verifier: GoogleVerifier, id_token: str) -> t
     return f"google:{sub}", name
 
 
+def initial_name(res: Resources, user_id: str, name: str) -> str:
+    """The name a new account starts with: the Google name when it passes the profanity hook and has at least two
+    characters, else Runner-xxxx."""
+    name = " ".join(name.split())
+    if len(name) < 2 or not profanity.is_allowed(name, res.settings.profanity_list_path):
+        return "Runner-" + user_id[:4]
+    return name
+
+
 async def upsert_user(res: Resources, subject: str, name: str) -> dict:
     users = res.db.users
     user = await users.find_one({"google_sub": subject})
     if user is None:
+        user_id = uuid.uuid4().hex
+        if subject.startswith("google:"):  # dev logins (tests, local use) keep their typed name
+            name = initial_name(res, user_id, name)
         doc = {
-            "_id": uuid.uuid4().hex,
+            "_id": user_id,
             "google_sub": subject,
             "name": name,
+            "name_lower": name_key(name),
+            "name_hidden": False,
             "created_at": res.clock(),
             "home_zones": [],
             "freeze_until": None,
@@ -129,6 +145,12 @@ async def upsert_user(res: Resources, subject: str, name: str) -> dict:
             return doc
         except DuplicateKeyError:
             user = await users.find_one({"google_sub": subject})
+    if user is not None and "name_lower" not in user:  # an account from before phase 1a: index its name lazily
+        user["name_lower"], user["name_hidden"] = name_key(user["name"]), user.get("name_hidden", False)
+        await users.update_one(
+            {"_id": user["_id"], "name_lower": {"$exists": False}},
+            {"$set": {"name_lower": user["name_lower"], "name_hidden": user["name_hidden"]}},
+        )
     return user
 
 

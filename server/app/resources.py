@@ -89,3 +89,7 @@ async def ensure_indexes(db: Any) -> None:
     await db.battle_events.create_index([("taker_id", 1), ("at", -1)])
     await db.battle_events.create_index("run_id")
     await db.battle_events.create_index("expire_at", expireAfterSeconds=0)
+    await db.users.create_index("name_lower")
+    await db.follows.create_index([("follower_id", 1), ("followee_id", 1)], unique=True)
+    await db.follows.create_index([("followee_id", 1), ("at", -1), ("_id", -1)])
+    await db.follows.create_index([("follower_id", 1), ("at", -1), ("_id", -1)])

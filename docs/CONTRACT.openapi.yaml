@@ -75,6 +75,7 @@ paths:
         "401": {description: Missing, invalid or expired token}
         "403": {description: The account is being deleted; every route except DELETE /me refuses it}
         "422": {description: Bad limit, cursor or status}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /runs/{id}:
     get:
       summary: Status and result of a run
@@ -332,6 +333,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Profile"}
         "404": {description: Unknown user, being deleted, or blocked either way}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /users/{id}/follow:
     put:
       summary: Follow a user (idempotent)
@@ -372,6 +374,7 @@ paths:
                   items: {type: array, items: {$ref: "#/components/schemas/UserListItem"}}
                   next_cursor: {type: string, nullable: true}
         "422": {description: Bad limit or cursor}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /me/following:
     get:
       summary: People the caller follows, newest first
@@ -388,6 +391,7 @@ paths:
                   items: {type: array, items: {$ref: "#/components/schemas/UserListItem"}}
                   next_cursor: {type: string, nullable: true}
         "422": {description: Bad limit or cursor}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /me/rivals:
     get:
       summary: Users the caller traded cells with in the last 30 days (either direction)
@@ -402,6 +406,7 @@ paths:
                   users:
                     type: array
                     items: {$ref: "#/components/schemas/UserListItem"}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /feed:
     get:
       summary: Accepted runs of people the caller follows, plus the caller's own, newest first
@@ -421,6 +426,7 @@ paths:
                   items: {type: array, items: {$ref: "#/components/schemas/RunCard"}}
                   next_cursor: {type: string, nullable: true}
         "422": {description: Bad limit or cursor}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /runs/{id}/kudos:
     put:
       summary: Give kudos (idempotent; one per user per run)
@@ -463,6 +469,7 @@ paths:
                   next_cursor: {type: string, nullable: true}
         "404": {description: Run not visible to the caller}
         "422": {description: Bad limit or cursor}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
     post:
       summary: Add a comment
       parameters:
@@ -504,6 +511,7 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/BattleSummary"}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /battles/rivalry:
     get:
       summary: Per-opponent battle totals
@@ -523,6 +531,7 @@ paths:
                     items: {$ref: "#/components/schemas/Rival"}
                   unattributed: {$ref: "#/components/schemas/BattleCounts"}
         "422": {description: days outside 1..90}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /battles/take-back:
     get:
       summary: Cells the caller lost in the last 7 days, to draw and win back
@@ -540,6 +549,7 @@ paths:
                   cells:
                     type: array
                     items: {$ref: "#/components/schemas/LostCell"}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /notifications:
     get:
       summary: In-app notifications inbox, newest first
@@ -558,6 +568,7 @@ paths:
                   next_cursor: {type: string, nullable: true}
                   unread_count: {type: integer}
         "422": {description: Bad limit or cursor}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /notifications/unread-count:
     get:
       summary: Number of unread, visible notifications
@@ -569,6 +580,7 @@ paths:
                 type: object
                 properties:
                   unread_count: {type: integer}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
   /notifications/read:
     post:
       summary: Mark notifications read
@@ -617,6 +629,7 @@ paths:
                 properties:
                   items: {type: array, items: {$ref: "#/components/schemas/UserRef"}}
                   next_cursor: {type: string, nullable: true}
+        "429": {description: "Rate limited: 120 read requests per minute across all phase 1a read routes (Retry-After says how long to wait)"}
 components:
   securitySchemes:
     bearer: {type: http, scheme: bearer}

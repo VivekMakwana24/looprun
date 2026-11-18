@@ -148,6 +148,7 @@ def test_get_me_returns_name_zones_and_freeze_quota(client, clock):
         "user": {"id": a["_uid"], "name": "alice"},
         "home_zones": [],
         "freeze": {"freeze_until": None, "used_days": 0, "quota_days": 30, "window_days": 90},
+        "name_hidden": False,  # Phase 1a, additive
     }
     zone = {"lat": 50.0, "lng": 8.7, "radius_m": 300.0}
     assert client.put("/v1/me/home-zones", json={"zones": [zone]}, headers=hdr(a)).status_code == 204

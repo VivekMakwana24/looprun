@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+import unicodedata
 from typing import Any
 from uuid import UUID
 
@@ -12,11 +12,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pymongo.errors import DuplicateKeyError, PyMongoError
 from redis.exceptions import RedisError
 
-from . import auth
+from . import auth, profanity, social
 from .cellview import build_views
 from .errors import RETRYABLE, LockTimeout
-from .events import iso_week, leaderboard_key
+from .events import iso_week
 from .freeze import quota_ok, rebase_for_freeze, settle_freeze, used_days
+from .leaderboard import cached_public_counts, weekly_rows
+from .leaderboard import public_counts as _public_counts  # noqa: F401 - kept importable from here
 from .models import (
     CellsResponse,
     FreezeRequest,
@@ -25,6 +27,9 @@ from .models import (
     HomeZonesRequest,
     LeaderboardResponse,
     MeResponse,
+    Profile,
+    RenameRequest,
+    RenameResponse,
     ReportRequest,
     RunStatus,
     RunUpload,
@@ -32,6 +37,7 @@ from .models import (
     UserRef,
 )
 from .processing import delete_account, expiry, purge_redis
+from .ratelimit import hit_rate_limit
 from .resources import Resources
 from .worker import enqueue_run
 
@@ -81,18 +87,6 @@ def run_status(doc: dict) -> RunStatus:
         cells_taken_from_others=doc.get("cells_taken_from_others", 0),
         flags=doc.get("flags", []),
     )
-
-
-async def hit_rate_limit(res: Resources, scope: str, user_id: str, limit: int, window_s: int) -> int | None:
-    """Fixed-window counter in Redis. Returns None when allowed, else seconds until the window ends."""
-    bucket = (res.clock() // 1000) // window_s
-    key = f"looprun:rl:{scope}:{user_id}:{bucket}"
-    n = await res.redis.incr(key)
-    if n == 1:
-        await res.redis.expire(key, window_s)
-    if n > limit:
-        return max(1, int((bucket + 1) * window_s - res.clock() // 1000))
-    return None
 
 
 # ---------------------------------------------------------------- auth
@@ -252,56 +246,15 @@ async def get_cells(
     return CellsResponse(cells=await build_views(res, docs, user["_id"]))
 
 
-async def _public_counts(res: Resources, now: int) -> dict[str, int]:
-    """Cells per user counting only what a stranger sees on GET /cells: ownership already published (same delay),
-    owner not deleting, and the owner's name not hidden (home zone, K-anonymity). Users whose cells are all hidden
-    do not appear at all."""
-    counts: dict[str, int] = {}
-    batch: list[dict] = []
-
-    async def flush() -> None:
-        for v in await build_views(res, batch, None):
-            if v["owner"] is not None:
-                counts[v["owner"]["id"]] = counts.get(v["owner"]["id"], 0) + 1
-        batch.clear()
-
-    async for d in res.db.cells.find({}):
-        batch.append(d)
-        if len(batch) >= 5000:
-            await flush()
-    await flush()
-    return counts
-
-
 @router.get("/leaderboard/weekly", response_model=LeaderboardResponse, responses=errs(401, 403))
 async def leaderboard(
     user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
 ) -> LeaderboardResponse:
-    s = res.settings
-    now = res.clock()
-    week = iso_week(now)
-    key = leaderboard_key(week)
-    counts: dict[str, int] | None = None
-    if s.leaderboard_cache_seconds > 0:
-        cached = await res.redis.get(key)
-        if cached:
-            counts = json.loads(cached)
-    if counts is None:
-        counts = await _public_counts(res, now)
-        if s.leaderboard_cache_seconds > 0:
-            await res.redis.set(key, json.dumps(counts), ex=s.leaderboard_cache_seconds)
-    # Everybody sees only what the map shows them (published, named); the viewer additionally sees their own at once.
-    own = await res.db.cells.count_documents({"owner_id": user["_id"]})
-    counts = {**counts, user["_id"]: own}
-    counts = {uid: n for uid, n in counts.items() if n > 0}
-    users = {u["_id"]: u async for u in res.db.users.find({"_id": {"$in": sorted(counts)}})}
-    rows = sorted(
-        ((n, users[uid]["name"], uid) for uid, n in counts.items() if uid in users and not users[uid].get("deleting")),
-        key=lambda r: (-r[0], r[1], r[2]),
-    )
+    week = iso_week(res.clock())
+    rows, own = await weekly_rows(res, user["_id"])
     entries = [
         {"rank": i + 1, "user": {"id": uid, "name": name}, "cells": n}
-        for i, (n, name, uid) in enumerate(rows[: s.leaderboard_size])
+        for i, (n, name, uid) in enumerate(rows[: res.settings.leaderboard_size])
     ]
     # The caller's own place, also when it is below the listed entries.
     my_rank = next((i + 1 for i, r in enumerate(rows) if r[2] == user["_id"]), None)
@@ -328,6 +281,59 @@ async def get_me(user: dict = Depends(auth.current_user), res: Resources = Depen
         user=UserRef(id=fresh["_id"], name=fresh["name"]),
         home_zones=fresh.get("home_zones", []),
         freeze=_freeze_status(res, fresh, res.clock()),
+        name_hidden=bool(fresh.get("name_hidden")),
+    )
+
+
+# control, format (zero-width, bidi), surrogate, private use, unassigned
+NAME_BAD_CATEGORIES = {"Cc", "Cf", "Cs", "Co", "Cn"}
+
+
+def clean_display_name(raw: str) -> str | None:
+    """Trim, collapse inner whitespace, NFC; None when the name is not allowed (2..30 code points, no control or
+    zero-width characters, passes the profanity hook)."""
+    if any(unicodedata.category(c) in NAME_BAD_CATEGORIES for c in raw):
+        return None
+    name = " ".join(unicodedata.normalize("NFC", raw).split())
+    return name if 2 <= len(name) <= 30 else None
+
+
+@router.patch("/me", response_model=RenameResponse, responses=errs(401, 403, 422, 429))
+async def rename_me(
+    body: RenameRequest, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
+) -> RenameResponse:
+    """Change the display name (2..30 characters). Clears a moderation hide of the old name."""
+    s = res.settings
+    await social.limited(res, "rename", user["_id"], s.social_rename_rate, 86_400)
+    name = clean_display_name(body.display_name)
+    if name is None or not profanity.is_allowed(name, s.profanity_list_path):
+        raise social.err(422, "name_rejected", "This name cannot be used")  # same message whatever the rule
+    await res.db.users.update_one(
+        {"_id": user["_id"]}, {"$set": {"name": name, "name_lower": social.name_key(name), "name_hidden": False}}
+    )
+    return RenameResponse(user=UserRef(id=user["_id"], name=name))
+
+
+@router.get("/users/{user_id}", response_model=Profile, responses=errs(401, 403, 404, 422, 429))
+async def get_profile(
+    user_id: str, viewer: dict = Depends(social.reader), res: Resources = Depends(auth.get_res)
+) -> Profile:
+    me = viewer["_id"]
+    target = await social.visible_user(res, me, user_id)
+    rows, own = await weekly_rows(res, me)
+    counts = await cached_public_counts(res)
+    f = res.db.follows
+    return Profile(
+        id=user_id,
+        name=social.user_ref(target, me)["name"],
+        cells_held=own if user_id == me else counts.get(user_id, 0),
+        weekly_rank=next((i + 1 for i, r in enumerate(rows) if r[2] == user_id), None),
+        followers_count=await f.count_documents({"followee_id": user_id}),
+        following_count=await f.count_documents({"follower_id": user_id}),
+        joined_at=target["created_at"],
+        is_me=user_id == me,
+        is_following=user_id != me and await f.find_one({"_id": f"{me}:{user_id}"}, {"_id": 1}) is not None,
+        follows_me=user_id != me and await f.find_one({"_id": f"{user_id}:{me}"}, {"_id": 1}) is not None,
     )
 
 

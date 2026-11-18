@@ -136,3 +136,18 @@ def test_real_mongo_phase1a_battle_events_and_indexes(real_db):
         run_keys = {tuple(i["key"].keys()) for i in real_db.runs.list_indexes()}
         assert ("user_id", "status", "processed_at", "_id") in run_keys
         assert ("user_id", "started_at", "_id") in run_keys
+
+
+def test_real_mongo_profile_rename_and_follow_indexes(real_db):
+    with _real_client() as client:
+        a = login(client, f"pa{uuid.uuid4().hex[:6]}")
+        b = login(client, f"pb{uuid.uuid4().hex[:6]}")
+        r = client.patch("/v1/me", json={"display_name": "  Mia   K "}, headers=hdr(a))
+        assert r.status_code == 200 and r.json()["user"]["name"] == "Mia K"
+        assert real_db.users.find_one({"_id": a["_uid"]})["name_lower"] == "mia k"
+        profile = client.get(f"/v1/users/{a['_uid']}", headers=hdr(b))
+        assert profile.status_code == 200 and profile.json()["name"] == "Mia K"
+        follows = {i["name"]: i for i in real_db.follows.list_indexes()}
+        uniq = [i for i in follows.values() if i.get("unique")]
+        assert [list(i["key"]) for i in uniq] == [["follower_id", "followee_id"]]
+        assert "name_lower_1" in {i["name"] for i in real_db.users.list_indexes()}

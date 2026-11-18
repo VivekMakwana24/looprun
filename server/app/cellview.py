@@ -7,6 +7,7 @@ from typing import Any
 from . import engine_adapter as eng
 from .freeze import strength
 from .resources import Resources
+from .social import display_name
 
 CHUNK = 4000
 
@@ -106,12 +107,12 @@ async def build_views(res: Resources, docs: list[dict], viewer_id: str | None) -
             # a vanished or deleting owner is never shown: the cell counts as unowned until it is reassigned
             continue
         if owner == viewer_id:
-            view = _cell(d, {"id": owner, "name": user["name"]}, True, False)
+            view = _cell(d, {"id": owner, "name": user["name"]}, True, False)  # the owner sees their real name
             if cid in strengths:
                 view["strength"] = strengths[cid]
             out.append(view)
             continue
         zones = [(z["lat"], z["lng"], z["radius_m"]) for z in user.get("home_zones", [])]
         hidden = eng.in_home_zone(cid, zones) or len(neighbours.get(cid, ())) < s.privacy_min_users
-        out.append(_cell(d, None if hidden else {"id": owner, "name": user["name"]}, False, hidden))
+        out.append(_cell(d, None if hidden else {"id": owner, "name": display_name(user)}, False, hidden))
     return out

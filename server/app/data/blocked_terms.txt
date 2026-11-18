@@ -1,0 +1,69 @@
+# Display-name blocklist for app/profanity.py. One entry per line; "#" starts a comment; case does not matter.
+#   word    matches a whole word only (so "Scunthorpe", "Dickens" or "classic" are fine)
+#   *stem   matches anywhere inside a word or inside the whole name with separators removed ("f u c k", "f.u.c.k")
+# Entries are matched after lowercasing, accent stripping and leetspeak mapping (0->o, 1->i/l, 3->e, 4->a, 5->s,
+# @->a, $->s). This is a starter list for abusive, hateful and sexual terms in English, German and transliterated
+# Hindi; the operator extends it (point LOOPRUN_PROFANITY_LIST_PATH at a longer file) and the hook in app/profanity.py
+# is the only place to swap in a moderation service.
+# Short or ambiguous words are whole-word entries on purpose. The Scunthorpe problem decision: no short stem
+# (cunt, ass, tit, cum, anal ...) is ever a substring entry.
+
+# --- substring stems (long, unambiguous) ---
+*fuck
+*shit
+*bitch
+*nigger
+*nigga
+*faggot
+*bastard
+*asshole
+*arsehole
+*wanker
+*motherfuck
+*cocksuck
+*dickhead
+*pussy
+*whore
+*slut
+*retard
+*hitler
+*kike
+*chink
+*wetback
+*tranny
+*rapist
+*arschloch
+*scheisse
+*scheiss
+*hurensohn
+*wichser
+*fotze
+*schlampe
+*missgeburt
+*madarchod
+*behenchod
+*bhosd
+*chutiy
+*gaandu
+*harami
+
+# --- whole words ---
+cunt
+twat
+ass
+tits
+anal
+rape
+nazi
+heil
+negro
+dyke
+fag
+spast
+nutte
+kanake
+fick
+ficken
+gandu
+bsdk
+chod

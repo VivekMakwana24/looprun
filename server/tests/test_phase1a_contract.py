@@ -7,9 +7,7 @@ from .contract_util import PHASE1A_OPS, app_operations, contract_operations
 # Operations whose area is not built yet. Each area's commit removes its operations; the list ends empty.
 PENDING: set[tuple[str, str]] = {
     ("/runs", "get"),
-    ("/me", "patch"),
     ("/users/search", "get"),
-    ("/users/{id}", "get"),
     ("/users/{id}/follow", "put"),
     ("/users/{id}/follow", "delete"),
     ("/me/followers", "get"),

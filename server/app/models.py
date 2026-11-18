@@ -135,6 +135,29 @@ class MeResponse(BaseModel):
     user: UserRef
     home_zones: list[HomeZone] = []
     freeze: FreezeStatus
+    name_hidden: bool = False  # moderation hid the caller's name from others (Phase 1a)
+
+
+class RenameRequest(BaseModel):
+    # Length and characters are checked in the route (422 name_rejected); this only bounds the input size.
+    display_name: str = Field(max_length=200)
+
+
+class RenameResponse(BaseModel):
+    user: UserRef
+
+
+class Profile(BaseModel):
+    id: str
+    name: str
+    cells_held: int
+    weekly_rank: int | None
+    followers_count: int
+    following_count: int
+    joined_at: int
+    is_me: bool
+    is_following: bool
+    follows_me: bool
 
 
 class ReportRequest(BaseModel):
