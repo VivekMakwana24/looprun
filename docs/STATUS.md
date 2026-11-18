@@ -18,3 +18,10 @@ Open follow-ups: docs/verification/M-redesign.md "Not verified" and "Gaps", O1-C
 stale `deleting` accounts sweeper, map tile provider decision.
 User-side: Play account type, 12 testers, OAuth client IDs (web client set; Android client with the release SHA-1
 still needed for release builds), AWS Lightsail, signing keystore + GitHub secrets, privacy policy hosting.
+
+## Mobile phase 1a (2026-11-18)
+
+Feed, run detail with comments and kudos, public profiles, follow/block/report, followers/following, search, rivals,
+battles, "take it back" sheet, inbox with bell, run history and rename are written against the phase 1a contract.
+Navigation: BOARD hub (FEED / RANKS / RIVALS), see mobile/NOTES.md. Not yet run on a device; checklist in
+docs/verification/phase1-device-checklist.md.

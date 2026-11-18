@@ -91,7 +91,7 @@ See `../docs/MOBILE_ARCHITECTURE.md` for the rules. In short:
 lib/core/          config, theme, formatting, AppException
 lib/domain/recorder/ pure Dart: run state machine, GPS health, haversine
 lib/data/          providers.dart (DI), services/, db/, repositories/, models/, upload/
-lib/ui/            one folder per feature: *_screen.dart (view) + *_view_model.dart (Riverpod notifier)
+lib/ui/            one folder per feature (feed, history, people, inbox, battles, board, ...): *_screen.dart (view) + *_view_model.dart (Riverpod notifier)
 lib/router.dart    go_router + appRedirect (signed out -> sign-in, no disclosure -> disclosure, else home)
 test/              fakes/, domain/, data/, ui/, architecture_test.dart
 tool/              bootstrap.sh, patch_android.sh, patch_signing.sh, check_manifest.sh

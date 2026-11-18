@@ -67,8 +67,22 @@ Architecture: docs/MOBILE_ARCHITECTURE.md (views + Riverpod notifier view models
   text (`googleSignInErrorMessage`, `signInErrorText`); debug builds add the API address to "Can't reach the server".
   `DEV_AUTH` defaults to on in debug builds and is forced off in release builds.
 - **Release guard (F19):** a release build with placeholder or non-https settings shows a configuration error screen.
-- Not done: Play Integrity, iOS, `pubspec.lock`, production tile provider, run history screen, app lifecycle pause of the
+- Not done: Play Integrity, iOS, `pubspec.lock`, production tile provider, app lifecycle pause of the
   live socket (F15), per-user disclosure flag (F21), Drift-backed store tests (F25).
+
+## Phase 1a: social surfaces
+
+- **Navigation:** lanes stay 1 MAP, 2 BOARD, 3 YOU. The feed lives on BOARD as a hub with three tabs (FEED, RANKS, RIVALS), not a
+  fourth lane: a fourth lane would crowd the numbered nav and the design has no slot for it, and the feed, the ranks and rivals are
+  all "other runners". Search, rivals list, run detail and public profiles are full-screen pages above the shell.
+  The inbox bell with the unread count sits on the map header (`/home/inbox`); the count refreshes when lane 1 is shown.
+- **Layers:** services (`SocialApi`) -> repositories (user, feed, battle, notification, report; each takes only `ApiService`) ->
+  Riverpod notifiers. `PagedViewModel` is the shared cursor list (`items`/`next_cursor`, refresh, load more, retry, optimistic
+  replace/remove). `SocialActionsViewModel` holds follow/block/report/kudos calls and returns friendly outcomes.
+- **Privacy:** run cards and detail never draw a route line, only the numbers. Names hidden by the server are shown as returned.
+  Errors are read from `{"detail":{"code","message"}}` and mapped to sentences in `ApiException.friendlyMessage`.
+- **Take it back:** the map sheet draws lost cells from their boundaries (`lr-lost` layer) and focuses the camera on them.
+- **Unverified on a device:** the lost-cell layer, bell badge layout at large font scales, keyboard behaviour in the comment box.
 
 ## Dependency set
 
