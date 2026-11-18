@@ -240,3 +240,44 @@ class Comment(BaseModel):
 class CommentPage(BaseModel):
     items: list[Comment]
     next_cursor: str | None = None
+
+
+class BattleCounts(BaseModel):
+    taken: int = 0
+    lost: int = 0
+
+
+class BattleSummary(BaseModel):
+    days: int = 7
+    taken: int
+    lost: int
+    net: int
+    battles: int
+
+
+class Rival(BaseModel):
+    user: UserRef
+    taken: int
+    lost: int
+    net: int
+    last_battle_at: int
+    is_following: bool
+
+
+class Rivalry(BaseModel):
+    days: int
+    rivals: list[Rival]
+    unattributed: BattleCounts
+
+
+class LostCell(BaseModel):
+    cell: str
+    lat: float
+    lng: float
+    boundary: list[list[float]]
+    lost_at: int
+    lost_to: UserRef | None = None
+
+
+class TakeBack(BaseModel):
+    cells: list[LostCell]

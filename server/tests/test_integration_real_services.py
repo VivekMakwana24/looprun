@@ -207,3 +207,24 @@ def test_real_mongo_kudos_and_comments_counts_on_cards(real_db):
         assert real_db.notifications.count_documents({"type": {"$in": ["kudos", "comment"]}}) == 2
         assert client.delete(f"/v1/runs/{rid}/comments/{c.json()['id']}", headers=hdr(b)).status_code == 204
         assert real_db.comments.count_documents({}) == 0
+
+
+def test_real_mongo_battles_from_a_real_takeover(real_db):
+    with _real_client() as client:
+        a = login(client, f"ba{uuid.uuid4().hex[:6]}")
+        b = login(client, f"bb{uuid.uuid4().hex[:6]}")
+        t0 = int(time.time() * 1000) - 7_200_000
+        upload(client, a, square_fixes(t0=t0, speed=3.0))
+        rid, _ = upload(client, b, square_fixes(t0=t0 + 3_600_000, speed=1.5))
+        n = client.get(f"/v1/runs/{rid}", headers=hdr(b)).json()["cells_taken_from_others"]
+        assert n > 0
+        # events younger than the real 30-minute delay are not visible to anybody yet
+        assert client.get("/v1/battles/summary", headers=hdr(a)).json()["lost"] == 0
+        real_db.battle_events.update_many({}, {"$set": {"at": int(time.time() * 1000) - 3_600_000}})
+        sa = client.get("/v1/battles/summary", headers=hdr(a)).json()
+        sb = client.get("/v1/battles/summary", headers=hdr(b)).json()
+        assert (sa["lost"], sa["battles"], sb["taken"]) == (n, 1, n)
+        back = client.get("/v1/battles/take-back", headers=hdr(a)).json()["cells"]
+        assert len(back) == n and all(len(c["boundary"]) in (5, 6) for c in back)
+        rv = client.get("/v1/battles/rivalry", headers=hdr(a)).json()
+        assert rv["unattributed"]["lost"] + sum(r["lost"] for r in rv["rivals"]) == n  # K-anonymity decides which

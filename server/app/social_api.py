@@ -10,17 +10,24 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response
 
 from . import auth, profanity, social
+from . import engine_adapter as eng
 from .api import errs
-from .cards import block_ids, build_cards, count_kudos
+from .cards import block_ids, build_cards, count_kudos, event_cutoff
 from .leaderboard import cached_public_counts, weekly_rows
 from .models import (
+    BattleCounts,
+    BattleSummary,
     Comment,
     CommentPage,
     CommentRequest,
     FollowState,
     KudosState,
+    LostCell,
     Profile,
+    Rival,
+    Rivalry,
     RunPage,
+    TakeBack,
     UserList,
     UserListItem,
     UserPage,
@@ -416,3 +423,114 @@ async def delete_comment(
         await res.db.comments.delete_one({"_id": comment_id})
         await res.db.notifications.delete_one({"_id": f"comment:{comment_id}"})
     return Response(status_code=204)
+
+
+# ---------------------------------------------------------------- battles
+SUMMARY_DAYS = 7
+TAKE_BACK_MAX = 500
+
+
+def _window(res: Resources, days: int) -> dict:
+    """Events the map already shows (older than the publish delay) from the last `days` days, never older than the
+    retention even when Mongo's TTL monitor has not deleted them yet."""
+    now = res.clock()
+    lo = max(now - days * DAY_MS, event_cutoff(res, now))
+    return {"$gte": lo, "$lte": now - res.settings.publish_delay_seconds * 1000}
+
+
+@router.get("/battles/summary", response_model=BattleSummary, responses=errs(401, 403, 429))
+async def battles_summary(user: dict = Depends(social.reader), res: Resources = Depends(auth.get_res)) -> BattleSummary:
+    """Cells taken and lost in the last 7 days. Counts include events whose opponent's name is hidden."""
+    me, ev = user["_id"], res.db.battle_events
+    at = _window(res, SUMMARY_DAYS)
+    taken = await ev.count_documents({"taker_id": me, "at": at})
+    lost = await ev.count_documents({"victim_id": me, "at": at})
+    runs = await ev.distinct("run_id", {"$or": [{"taker_id": me}, {"victim_id": me}], "at": at})
+    return BattleSummary(days=SUMMARY_DAYS, taken=taken, lost=lost, net=taken - lost, battles=len(runs))
+
+
+@router.get("/battles/rivalry", response_model=Rivalry, responses=errs(401, 403, 422, 429))
+async def battles_rivalry(
+    days: int = Query(30, ge=1, le=90), user: dict = Depends(social.reader), res: Resources = Depends(auth.get_res)
+) -> Rivalry:
+    """Per opponent whose name is visible for the cells involved; everything else is summed in `unattributed`."""
+    me = user["_id"]
+    q = {"$or": [{"taker_id": me}, {"victim_id": me}], "at": _window(res, days)}
+    events = [e async for e in res.db.battle_events.find(q)]
+    pairs = [(e, e["victim_id"] if e["taker_id"] == me else e["taker_id"]) for e in events]
+    oks, users = await social.name_ok_many(res, me, pairs)
+    per: dict[str, dict] = {}
+    hidden = BattleCounts()
+    for (e, opp), ok in zip(pairs, oks, strict=True):
+        took = e["taker_id"] == me
+        if not ok:
+            hidden.taken += took
+            hidden.lost += not took
+            continue
+        row = per.setdefault(opp, {"taken": 0, "lost": 0, "last": 0})
+        row["taken" if took else "lost"] += 1
+        row["last"] = max(row["last"], e["at"])
+    order = sorted(per, key=lambda o: (-(per[o]["taken"] + per[o]["lost"]), -per[o]["last"], o))[:50]
+    following, _ = await social.follow_flags(res, me, order)
+    return Rivalry(
+        days=days,
+        rivals=[
+            Rival(
+                user=social.user_ref(users[o], me),  # type: ignore[arg-type]
+                taken=per[o]["taken"],
+                lost=per[o]["lost"],
+                net=per[o]["taken"] - per[o]["lost"],
+                last_battle_at=per[o]["last"],
+                is_following=o in following,
+            )
+            for o in order
+        ],
+        unattributed=hidden,
+    )
+
+
+@router.get("/battles/take-back", response_model=TakeBack, responses=errs(401, 403, 429))
+async def battles_take_back(user: dict = Depends(social.reader), res: Resources = Depends(auth.get_res)) -> TakeBack:
+    """Cells the caller lost in the last 7 days that somebody else (or nobody) holds now, newest loss first.
+    The taker's run is never sent, and the taker is named only when the map would name them."""
+    me = user["_id"]
+    q = {"victim_id": me, "at": _window(res, SUMMARY_DAYS)}
+    seen: set[str] = set()
+    rows: list[dict] = []
+    batch: list[dict] = []
+
+    async def flush() -> None:
+        fresh = []
+        for e in batch:
+            if e["cell"] not in seen:  # the latest event of a cell comes first
+                seen.add(e["cell"])
+                fresh.append(e)
+        batch.clear()
+        found = res.db.cells.find({"_id": {"$in": [e["cell"] for e in fresh]}}, {"owner_id": 1})
+        owners = {d["_id"]: d.get("owner_id") async for d in found}
+        rows.extend(e for e in fresh if owners.get(e["cell"]) != me)  # won back: not listed
+
+    async for e in res.db.battle_events.find(q).sort([("at", -1), ("_id", -1)]):
+        batch.append(e)
+        if len(batch) >= 500:
+            await flush()
+            if len(rows) >= TAKE_BACK_MAX:
+                break
+    if batch:
+        await flush()
+    rows = rows[:TAKE_BACK_MAX]
+    oks, takers = await social.name_ok_many(res, me, [(e, e.get("taker_id")) for e in rows])
+    out = []
+    for e, ok in zip(rows, oks, strict=True):
+        lat, lng = eng.cell_centre(e["cell"])
+        out.append(
+            LostCell(
+                cell=e["cell"],
+                lat=lat,
+                lng=lng,
+                boundary=eng.cell_boundary(e["cell"]),
+                lost_at=e["at"],
+                lost_to=social.user_ref(takers[e["taker_id"]], me) if ok else None,  # type: ignore[arg-type]
+            )
+        )
+    return TakeBack(cells=out)
