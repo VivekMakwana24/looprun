@@ -12,11 +12,16 @@ import 'db/connection.dart';
 import 'db/drift_run_store.dart';
 import 'db/run_store.dart';
 import 'repositories/auth_repository.dart';
+import 'repositories/battle_repository.dart';
 import 'repositories/cell_repository.dart';
+import 'repositories/feed_repository.dart';
 import 'repositories/location_repository.dart';
+import 'repositories/notification_repository.dart';
 import 'repositories/profile_repository.dart';
+import 'repositories/report_repository.dart';
 import 'repositories/run_repository.dart';
 import 'repositories/theme_repository.dart';
+import 'repositories/user_repository.dart';
 import 'services/api_service.dart';
 import 'services/foreground_service.dart';
 import 'services/google_auth_service.dart';
@@ -170,6 +175,24 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
     currentUserId: () => _currentUserId(ref),
   );
 });
+
+// Phase 1a. Each one is built from apiServiceProvider only (never from another repository), so none of
+// them can close a dependency cycle through the auth repository. provider_graph_test reads them all.
+
+final feedRepositoryProvider =
+    Provider<FeedRepository>((ref) => FeedRepository(api: ref.watch(apiServiceProvider)));
+
+final userRepositoryProvider =
+    Provider<UserRepository>((ref) => UserRepository(api: ref.watch(apiServiceProvider)));
+
+final battleRepositoryProvider =
+    Provider<BattleRepository>((ref) => BattleRepository(api: ref.watch(apiServiceProvider)));
+
+final notificationRepositoryProvider = Provider<NotificationRepository>(
+    (ref) => NotificationRepository(api: ref.watch(apiServiceProvider)));
+
+final reportRepositoryProvider =
+    Provider<ReportRepository>((ref) => ReportRepository(api: ref.watch(apiServiceProvider)));
 
 final themeRepositoryProvider = Provider<ThemeRepository>((ref) {
   return ThemeRepository(prefs: ref.watch(preferencesProvider));

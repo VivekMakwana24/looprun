@@ -183,6 +183,9 @@ List<LatLngPoint> _boundary(Object? v) {
   return out;
 }
 
+/// Public form of the boundary parser for models in other files.
+List<LatLngPoint> parseBoundary(Object? v) => _boundary(v);
+
 class Cell {
   const Cell({
     required this.id,

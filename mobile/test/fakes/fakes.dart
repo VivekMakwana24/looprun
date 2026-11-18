@@ -13,6 +13,10 @@ import 'package:looprun/data/services/permission_service.dart';
 import 'package:looprun/data/upload/upload_queue.dart';
 import 'package:looprun/domain/recorder/run_recorder.dart';
 
+import 'social_fakes.dart';
+
+export 'social_fakes.dart';
+
 /// Lets everything that is already scheduled run: first the event queue (microtasks, zero-delay
 /// timers, stream events), then a short real wait for the few things that use real timers
 /// (review F24: the queue drain does not depend on how fast the CI machine is).
@@ -34,7 +38,7 @@ class FakeLinkService implements LinkService {
   }
 }
 
-class FakeApiService implements ApiService {
+class FakeApiService with FakeSocialApi implements ApiService {
   Session session = const Session(accessToken: 'tok', user: UserRef(id: 'u1', name: 'dev'));
   ApiException? authError;
   final List<String> idTokens = [];

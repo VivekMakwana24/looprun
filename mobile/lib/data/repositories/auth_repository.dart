@@ -75,6 +75,16 @@ class AuthRepository {
     return result;
   }
 
+  /// The caller renamed themselves (PATCH /me): keep the new name in memory and in secure storage.
+  /// Does nothing when signed out, or when the answer is about another account.
+  Future<void> updateUserName(UserRef user) async {
+    final now = _current;
+    if (now == null || (user.id.isNotEmpty && user.id != now.user.id)) return;
+    final renamed = AuthSession(token: now.token, user: UserRef(id: now.user.id, name: user.name));
+    await _tokens.write(StoredSession(token: renamed.token, userId: renamed.user.id, userName: renamed.user.name));
+    _set(renamed);
+  }
+
   Future<void> signOut() async {
     await _tokens.clear();
     await _google.signOut();

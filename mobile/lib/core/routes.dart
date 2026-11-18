@@ -19,3 +19,26 @@ const String recordPath = '/home/record';
 
 /// Result of one run: `/home/run/<id>` (full screen above the map, like [recordPath]).
 String runResultPath(String runId) => '/home/run/$runId';
+
+// ---- Phase 1a (social + battles). All of them are drawn full screen above the lanes (root navigator).
+
+/// The notifications inbox, opened from the bell on the map.
+const String inboxPath = '/home/inbox';
+
+/// Find runners by name (opened from the BOARD lane).
+const String searchPath = '/board/search';
+
+/// People the caller traded cells with recently.
+const String rivalsListPath = '/board/rivals';
+
+/// A run from the feed with its comments. The card can be passed as `extra` to show it at once.
+String boardRunPath(String runId) => '/board/run/$runId';
+
+/// A runner's public profile.
+String userProfilePath(String userId) => '/board/user/$userId';
+
+/// The caller's own run history, and the people lists, opened from the YOU lane.
+const String historyPath = '/you/history';
+const String followersPath = '/you/followers';
+const String followingPath = '/you/following';
+const String blockedPath = '/you/blocked';

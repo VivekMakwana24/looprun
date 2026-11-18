@@ -49,3 +49,33 @@ String formatRunDate(DateTime t) {
 
 /// "16 Nov" in the given (local) time.
 String formatDayMonth(DateTime t) => '${t.day} ${_months[t.month - 1]}';
+
+/// Pace in seconds per kilometre as "m:ss", or [noValue] when the server sent none (under 100 m, or still
+/// processing) or when it is slower than 60 min/km.
+String formatPaceSeconds(double? secPerKm) {
+  if (secPerKm == null || !secPerKm.isFinite || secPerKm <= 0 || secPerKm >= 3600) return noValue;
+  final total = secPerKm.round();
+  return '${total ~/ 60}:${_two(total % 60)}';
+}
+
+/// Moving time in whole seconds as "m:ss" or "h:mm:ss"; [noValue] when unknown.
+String formatMovingSeconds(int? seconds) => seconds == null ? noValue : formatDuration(seconds * 1000);
+
+/// "just now", "5 min ago", "3 h ago", "2 d ago", else "16 Nov". [now] is a parameter for tests.
+String formatAgo(DateTime then, {DateTime? now}) {
+  final diff = (now ?? DateTime.now()).difference(then);
+  if (diff.inSeconds < 60) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+  if (diff.inHours < 24) return '${diff.inHours} h ago';
+  if (diff.inDays < 7) return '${diff.inDays} d ago';
+  return formatDayMonth(then);
+}
+
+/// Up to two capital letters from a display name ("Anna Lee" -> "AL", "Runner-1a2b" -> "R1"). "?" when empty.
+String initialsOf(String name) {
+  final words = name.trim().split(RegExp(r'[\s\-_]+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return '?';
+  String first(String w) => String.fromCharCode(w.runes.first).toUpperCase();
+  if (words.length == 1) return first(words[0]);
+  return first(words[0]) + first(words[1]);
+}
