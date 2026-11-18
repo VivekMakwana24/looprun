@@ -161,7 +161,7 @@ class Profile(BaseModel):
 
 
 class ReportRequest(BaseModel):
-    kind: Literal["run", "cell"]
+    kind: Literal["run", "cell", "user", "comment", "run_card"]
     target_id: str = Field(min_length=1, max_length=100)
     reason: str = Field(min_length=1, max_length=500)
 
@@ -309,3 +309,8 @@ class UnreadCount(BaseModel):
 class MarkRead(BaseModel):
     ids: list[str] | None = Field(default=None, max_length=100)
     all: bool = False
+
+
+class BlockPage(BaseModel):
+    items: list[UserRef]
+    next_cursor: str | None = None

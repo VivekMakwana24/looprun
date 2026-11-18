@@ -29,7 +29,6 @@ from .models import (
     MeResponse,
     RenameRequest,
     RenameResponse,
-    ReportRequest,
     RunStatus,
     RunUpload,
     Session,
@@ -364,25 +363,3 @@ async def delete_me(
         log.warning("delete_me_interrupted", exc_info=True)
         raise HTTPException(503, "Busy, retry", headers={"Retry-After": "5"}) from None
     return Response(status_code=204)
-
-
-# ---------------------------------------------------------------- reports
-@router.post("/reports", status_code=202, responses=errs(401, 403, 422, 429))
-async def report(
-    body: ReportRequest, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
-) -> dict:
-    retry = await hit_rate_limit(res, "reports", user["_id"], 20, 3600)
-    if retry is not None:
-        raise HTTPException(429, "Too many reports", headers={"Retry-After": str(retry)})
-    await res.db.reports.insert_one(
-        {
-            "reporter_id": user["_id"],
-            "kind": body.kind,
-            "target_id": body.target_id,
-            "reason": body.reason,
-            "created_at": res.clock(),
-            "expire_at": expiry(res, res.settings.reports_retention_days),  # TTL index purges it
-            "state": "open",
-        }
-    )
-    return {"status": "recorded"}

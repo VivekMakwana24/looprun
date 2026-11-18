@@ -251,3 +251,44 @@ def test_real_mongo_notifications_inbox_and_mark_read(real_db):
         assert client.get("/v1/notifications/unread-count", headers=hdr(a)).json() == {"unread_count": 1}
         assert client.post("/v1/notifications/read", json={"all": True}, headers=hdr(a)).status_code == 204
         assert client.get("/v1/notifications/unread-count", headers=hdr(a)).json() == {"unread_count": 0}
+
+
+def test_real_mongo_block_report_unique_index_and_moderation_log_ttl(real_db):
+    import asyncio
+
+    from app import moderation  # noqa: PLC0415
+    from app.resources import build_resources  # noqa: PLC0415
+
+    with _real_client() as client:
+        a = login(client, f"ma{uuid.uuid4().hex[:6]}")
+        b = login(client, f"mb{uuid.uuid4().hex[:6]}")
+        assert client.put(f"/v1/users/{b['_uid']}/follow", headers=hdr(a)).status_code == 200
+        for _ in range(2):  # the same report twice: 202 both times, one row (unique partial index)
+            r = client.post(
+                "/v1/reports", json={"kind": "user", "target_id": b["_uid"], "reason": "x"}, headers=hdr(a)
+            )
+            assert r.status_code == 202
+        assert real_db.reports.count_documents({"kind": "user"}) == 1
+        for _ in range(2):  # old kinds are not deduplicated
+            client.post("/v1/reports", json={"kind": "cell", "target_id": "c", "reason": "x"}, headers=hdr(a))
+        assert real_db.reports.count_documents({"kind": "cell"}) == 2
+        idx = [i for i in real_db.reports.list_indexes() if i.get("unique")]
+        assert idx and idx[0]["partialFilterExpression"] == {"kind": {"$in": ["user", "comment", "run_card"]}}
+        # block: follows go, the row stays, profile is 404 both ways
+        assert client.put(f"/v1/users/{a['_uid']}/block", headers=hdr(b)).status_code == 204
+        assert real_db.follows.count_documents({}) == 0 and real_db.blocks.count_documents({}) == 1
+        assert client.get(f"/v1/users/{b['_uid']}", headers=hdr(a)).status_code == 404
+        # moderation CLI against the real database, then the TTL index of its log
+        async def hide() -> list[str]:  # one event loop for the Motor client: build, run, close
+            res = build_resources(Settings(mongo_url=MONGO_URL, redis_url=REDIS_URL))
+            try:
+                return await moderation.execute(res, ["hide-name", b["_uid"]], admin="ci")
+            finally:
+                await res.close()
+
+        lines = asyncio.run(hide())
+        assert "ok" in lines[0] and real_db.users.find_one({"_id": b["_uid"]})["name_hidden"] is True
+        assert real_db.reports.find_one({"kind": "user"})["state"] == "hidden"
+        assert real_db.moderation_log.count_documents({"admin": "ci"}) == 1
+        ttl = _ttl(real_db, "moderation_log")
+        assert any(list(i["key"]) == ["expire_at"] and i["expireAfterSeconds"] == 0 for i in ttl), ttl

@@ -8,6 +8,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
+from pymongo.errors import DuplicateKeyError
 
 from . import auth, profanity, social
 from . import engine_adapter as eng
@@ -17,6 +18,7 @@ from .leaderboard import cached_public_counts, weekly_rows
 from .models import (
     BattleCounts,
     BattleSummary,
+    BlockPage,
     Comment,
     CommentPage,
     CommentRequest,
@@ -27,6 +29,7 @@ from .models import (
     Notification,
     NotificationPage,
     Profile,
+    ReportRequest,
     Rival,
     Rivalry,
     RunPage,
@@ -37,6 +40,7 @@ from .models import (
     UserPage,
 )
 from .notifications import notify
+from .processing import expiry
 from .resources import Resources
 
 router = APIRouter(prefix="/v1")
@@ -624,3 +628,110 @@ async def mark_read(
         q["_id"] = {"$in": body.ids}
     await res.db.notifications.update_many(q, {"$set": {"read": True}})
     return Response(status_code=204)
+
+
+# ---------------------------------------------------------------- block
+@router.put("/users/{user_id}/block", status_code=204, responses=errs(401, 403, 404, 409, 422, 429))
+async def block_user(user_id: str, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)):
+    me = user["_id"]
+    await social.limited(res, "block", me, res.settings.social_block_rate, 3600)
+    if user_id == me:
+        raise social.err(422, "self", "You cannot block yourself")
+    if not social.live_user(await res.db.users.find_one({"_id": user_id})):
+        raise social.not_found()
+    if (
+        await res.db.blocks.find_one({"_id": f"{me}:{user_id}"}, {"_id": 1}) is None
+        and await res.db.blocks.count_documents({"blocker_id": me}) >= res.settings.social_max_blocks
+    ):
+        raise social.err(409, "block_limit", f"You can block at most {res.settings.social_max_blocks} people")
+    await social.apply_block(res, me, user_id)
+    return Response(status_code=204)
+
+
+@router.delete("/users/{user_id}/block", status_code=204, responses=errs(401, 403, 422))
+async def unblock_user(user_id: str, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)):
+    await res.db.blocks.delete_one({"_id": f"{user['_id']}:{user_id}"})  # follows are not restored
+    return Response(status_code=204)
+
+
+@router.get("/me/blocks", response_model=BlockPage, responses=errs(401, 403, 422, 429))
+async def my_blocks(
+    limit: int | None = None,
+    cursor: str | None = None,
+    user: dict = Depends(social.reader),
+    res: Resources = Depends(auth.get_res),
+) -> BlockPage:
+    me = user["_id"]
+    n = social.parse_limit(limit)
+    c = social.decode_cursor(cursor, 2)
+    q: dict = {"blocker_id": me}
+    if c:
+        q["$or"] = [{"at": {"$lt": c[0]}}, {"at": c[0], "_id": {"$lt": c[1]}}]
+    rows = [b async for b in res.db.blocks.find(q).sort([("at", -1), ("_id", -1)]).limit(n + 1)]
+    more = len(rows) > n
+    rows = rows[:n]
+    users = await social.live_users(res, [r["blocked_id"] for r in rows])
+    return BlockPage(
+        items=[social.user_ref(users[r["blocked_id"]], me) for r in rows if r["blocked_id"] in users],  # type: ignore[misc]
+        next_cursor=social.encode_cursor(rows[-1]["at"], rows[-1]["_id"]) if more else None,
+    )
+
+
+# ---------------------------------------------------------------- reports
+@router.post("/reports", status_code=202, responses=errs(401, 403, 404, 422, 429))
+async def report(
+    body: ReportRequest, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
+) -> dict:
+    """Kinds run and cell are stored as before. user, comment and run_card must be visible to the reporter (else 404),
+    cannot target oneself (422), keep a snapshot as evidence and are recorded once per reporter and target."""
+    me = user["_id"]
+    await social.limited(res, "reports", me, 20, 3600)  # one shared limit for every kind
+    doc: dict = {
+        "reporter_id": me,
+        "kind": body.kind,
+        "target_id": body.target_id,
+        "reason": body.reason,
+        "created_at": res.clock(),
+        "expire_at": expiry(res, res.settings.reports_retention_days),  # TTL index purges it
+        "state": "open",
+    }
+    if body.kind in ("user", "comment", "run_card"):
+        owner, snapshot = await _report_target(res, me, body.kind, body.target_id)
+        doc.update(target_owner_id=owner, snapshot=snapshot, resolved_at=None)
+        if await res.db.reports.find_one({"reporter_id": me, "kind": body.kind, "target_id": body.target_id}):
+            return {"status": "recorded"}  # the same report again: nothing new
+    try:
+        await res.db.reports.insert_one(doc)
+    except DuplicateKeyError:
+        pass  # a concurrent identical report: the unique partial index keeps one
+    return {"status": "recorded"}
+
+
+async def _report_target(res: Resources, me: str, kind: str, target_id: str) -> tuple[str, object]:
+    """(owner user id, snapshot) of a reportable target, or 404 / 422."""
+    if kind == "user":
+        if target_id == me:
+            raise social.err(422, "self", "You cannot report yourself")
+        target = await social.visible_user(res, me, target_id)
+        return target["_id"], target["name"]
+    if kind == "comment":
+        comment = await res.db.comments.find_one({"_id": target_id})
+        if comment is None or comment.get("hidden"):
+            raise social.not_found()
+        if comment["author_id"] == me:
+            raise social.err(422, "self", "You cannot report your own comment")
+        run = await res.db.runs.find_one({"_id": comment["run_id"]})
+        author = await res.db.users.find_one({"_id": comment["author_id"]})
+        if not await social.can_view_run(res, me, run) or not social.live_user(author):
+            raise social.not_found()
+        if await social.blocked(res, me, comment["author_id"]):
+            raise social.not_found()
+        return comment["author_id"], comment["text"]
+    run = await res.db.runs.find_one({"_id": target_id})
+    if run is None:
+        raise social.not_found()
+    if run["user_id"] == me:
+        raise social.err(422, "self", "You cannot report your own run")
+    if not await social.can_view_run(res, me, run):
+        raise social.not_found()
+    return run["user_id"], (await build_cards(res, me, [run]))[0]  # the card as the reporter saw it: no GPS

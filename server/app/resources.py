@@ -103,3 +103,13 @@ async def ensure_indexes(db: Any) -> None:
     await db.comments.create_index([("run_id", 1), ("created_at", 1), ("_id", 1)])
     await db.comments.create_index("author_id")
     await db.comments.create_index("run_owner_id")
+    await db.blocks.create_index([("blocker_id", 1), ("blocked_id", 1)], unique=True)
+    await db.blocks.create_index("blocked_id")
+    await db.reports.create_index([("state", 1), ("created_at", 1)])
+    # one report per reporter and target for the kinds of phase 1a (the old kinds `run` and `cell` stay repeatable)
+    await db.reports.create_index(
+        [("reporter_id", 1), ("kind", 1), ("target_id", 1)],
+        unique=True,
+        partialFilterExpression={"kind": {"$in": ["user", "comment", "run_card"]}},
+    )
+    await db.moderation_log.create_index("expire_at", expireAfterSeconds=0)

@@ -204,3 +204,21 @@ async def visible_run(res: Resources, viewer: str, run_id: str) -> dict:
     if not await can_view_run(res, viewer, run):
         raise not_found()
     return run  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------- block
+async def apply_block(res: Resources, a: str, b: str) -> bool:
+    """`a` blocks `b`: the row first (so nothing new can slip in), then follows both ways, kudos both ways and the
+    notifications between the two in either direction. Every step is idempotent, so a repeat heals a half-done
+    earlier call. Returns True when the block row is new."""
+    r = await res.db.blocks.update_one(
+        {"_id": f"{a}:{b}"}, {"$setOnInsert": {"blocker_id": a, "blocked_id": b, "at": res.clock()}}, upsert=True
+    )
+    await res.db.follows.delete_many(
+        {"$or": [{"follower_id": a, "followee_id": b}, {"follower_id": b, "followee_id": a}]}
+    )
+    await res.db.kudos.delete_many({"$or": [{"user_id": a, "run_owner_id": b}, {"user_id": b, "run_owner_id": a}]})
+    await res.db.notifications.delete_many(
+        {"$or": [{"user_id": a, "actor_id": b}, {"user_id": b, "actor_id": a}]}
+    )
+    return r.upserted_id is not None

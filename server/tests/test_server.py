@@ -258,7 +258,7 @@ def test_reports(client):
     assert ok.status_code == 202
     assert db_run(client, lambda db: db.reports.count_documents({})) == 1
     assert (
-        client.post("/v1/reports", json={"kind": "user", "target_id": "x", "reason": "r"}, headers=hdr(h)).status_code
+        client.post("/v1/reports", json={"kind": "banana", "target_id": "x", "reason": "r"}, headers=hdr(h)).status_code
         == 422
     )
     assert (

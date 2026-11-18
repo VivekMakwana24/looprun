@@ -6,10 +6,6 @@ from .contract_util import PHASE1A_OPS, app_operations, contract_operations
 
 # Operations whose area is not built yet. Each area's commit removes its operations; the list ends empty.
 PENDING: set[tuple[str, str]] = {
-    ("/users/{id}/block", "put"),
-    ("/users/{id}/block", "delete"),
-    ("/me/blocks", "get"),
-    ("/reports", "post"),
 }
 
 IMPLICIT = {"401", "403", "422"}  # every route has 401/403 (auth); FastAPI adds 422 for any parameter
