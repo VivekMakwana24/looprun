@@ -16,7 +16,7 @@ class ReportRepository {
   final ApiService _api;
 
   /// POST /reports. The server answers 202 also for a repeat report of the same target.
-  Future<void> submit({required String kind, required String targetId, required String reason}) {
+  Future<void> submit({required String kind, required String targetId, required String reason}) async {
     final text = reason.trim();
     if (text.isEmpty) throw const AppException('Tell us what is wrong.');
     final cut = codePointLength(text) > maxReasonLength

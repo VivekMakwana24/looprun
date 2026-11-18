@@ -187,6 +187,8 @@ void main() {
       expect(find.text('in the last 90 days'), findsOneWidget);
       expect(tester.getSize(find.byKey(const Key('remove_zone_0'))).height, greaterThanOrEqualTo(48));
 
+      await tester.ensureVisible(find.byKey(const Key('remove_zone_0')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('remove_zone_0')));
       await pumpABit(tester);
       expect(find.text('1 of 5 used'), findsOneWidget);

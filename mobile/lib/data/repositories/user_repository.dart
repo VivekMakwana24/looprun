@@ -43,5 +43,5 @@ class UserRepository {
   }
 
   /// PATCH /me. Returns the caller as the server stored it.
-  Future<UserRef> rename(String raw) => _api.renameMe(checkDisplayName(raw));
+  Future<UserRef> rename(String raw) async => _api.renameMe(checkDisplayName(raw));
 }

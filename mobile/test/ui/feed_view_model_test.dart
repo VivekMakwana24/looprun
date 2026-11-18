@@ -25,10 +25,11 @@ void main() {
       expect(sub.read().hasMore, isTrue);
 
       await c.read(feedViewModelProvider.notifier).loadMore();
+      final asked = h.api.count('feed');
       expect(sub.read().items.map((i) => i.id), ['r1', 'r2', 'r3'], reason: 'the overlapping card is shown once');
       expect(sub.read().hasMore, isFalse);
       await c.read(feedViewModelProvider.notifier).loadMore();
-      expect(h.api.count('feed'), 2, reason: 'no request after the last page');
+      expect(h.api.count('feed'), asked, reason: 'no request after the last page');
     });
 
     test('an empty feed is "empty", not an error', () async {

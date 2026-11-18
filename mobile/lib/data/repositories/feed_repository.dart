@@ -31,7 +31,7 @@ class FeedRepository {
     return text;
   }
 
-  Future<Comment> addComment(String runId, String raw) => _api.addComment(runId, checkComment(raw));
+  Future<Comment> addComment(String runId, String raw) async => _api.addComment(runId, checkComment(raw));
 
   /// The author and the owner of the run may delete; a comment that is already gone is fine.
   Future<void> deleteComment(String runId, String commentId) => _api.deleteComment(runId, commentId);

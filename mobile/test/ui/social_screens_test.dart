@@ -432,6 +432,8 @@ void main() {
       await pumpScreen(tester, h, const InboxScreen());
       await settleUi(tester);
       expect(find.text('Nothing yet'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
 
       final h2 = Harness();
       h2.api.socialErrors['notifications'] = const ApiException(null, 'offline');
@@ -459,6 +461,8 @@ void main() {
       await pumpScreen(tester, h, const MapScreen());
       await settleUi(tester);
       expect(find.byKey(const Key('inbox_badge')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
 
       final h2 = Harness()..api.unread = 140;
       await pumpScreen(tester, h2, const MapScreen());
@@ -576,7 +580,9 @@ void main() {
       expect(h.api.deletedComments, ['c2']);
       expect(find.text('Thanks'), findsNothing);
 
-      // Add one.
+      // Add one (after the "deleted" snack bar has gone from over the field).
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('comment_field')), 'See you out there');
       await tester.pump();
       await tester.tap(find.byKey(const Key('comment_send')));
