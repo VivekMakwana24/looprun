@@ -281,3 +281,31 @@ class LostCell(BaseModel):
 
 class TakeBack(BaseModel):
     cells: list[LostCell]
+
+
+class Notification(BaseModel):
+    id: str
+    type: Literal["cells_taken", "new_follower", "kudos", "comment"]
+    created_at: int  # visible_at: when it became visible to the caller
+    read: bool
+    actor: UserRef | None = None
+    cells: int | None = None
+    cells_unattributed: int | None = None
+    run_id: str | None = None
+    comment_id: str | None = None
+    comment_preview: str | None = None
+
+
+class NotificationPage(BaseModel):
+    items: list[Notification]
+    next_cursor: str | None = None
+    unread_count: int
+
+
+class UnreadCount(BaseModel):
+    unread_count: int
+
+
+class MarkRead(BaseModel):
+    ids: list[str] | None = Field(default=None, max_length=100)
+    all: bool = False

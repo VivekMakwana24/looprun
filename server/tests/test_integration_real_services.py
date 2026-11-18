@@ -228,3 +228,26 @@ def test_real_mongo_battles_from_a_real_takeover(real_db):
         assert len(back) == n and all(len(c["boundary"]) in (5, 6) for c in back)
         rv = client.get("/v1/battles/rivalry", headers=hdr(a)).json()
         assert rv["unattributed"]["lost"] + sum(r["lost"] for r in rv["rivals"]) == n  # K-anonymity decides which
+
+
+def test_real_mongo_notifications_inbox_and_mark_read(real_db):
+    with _real_client() as client:
+        a = login(client, f"na{uuid.uuid4().hex[:6]}")
+        b = login(client, f"nb{uuid.uuid4().hex[:6]}")
+        t0 = int(time.time() * 1000) - 7_200_000
+        upload(client, a, square_fixes(t0=t0, speed=3.0))
+        rid, _ = upload(client, b, square_fixes(t0=t0 + 3_600_000, speed=1.5))
+        assert client.put(f"/v1/users/{a['_uid']}/follow", headers=hdr(b)).status_code == 200
+        assert real_db.notifications.count_documents({"type": "cells_taken"}) == 1
+        # nothing is visible before visible_at (the real publish delay)
+        before = client.get("/v1/notifications", headers=hdr(a)).json()
+        assert before == {"items": [], "next_cursor": None, "unread_count": 0}
+        real_db.notifications.update_many({}, {"$set": {"visible_at": int(time.time() * 1000) - 1000}})
+        page = client.get("/v1/notifications", headers=hdr(a)).json()
+        assert {i["type"] for i in page["items"]} == {"cells_taken", "new_follower"} and page["unread_count"] == 2
+        assert rid not in str(page)
+        mine = [i["id"] for i in page["items"]]
+        assert client.post("/v1/notifications/read", json={"ids": mine[:1]}, headers=hdr(a)).status_code == 204
+        assert client.get("/v1/notifications/unread-count", headers=hdr(a)).json() == {"unread_count": 1}
+        assert client.post("/v1/notifications/read", json={"all": True}, headers=hdr(a)).status_code == 204
+        assert client.get("/v1/notifications/unread-count", headers=hdr(a)).json() == {"unread_count": 0}

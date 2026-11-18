@@ -22,6 +22,7 @@ from .errors import RETRYABLE, LockTimeout
 from .events import publish_changes, publish_user_deleted
 from .freeze import settle_expired
 from .locks import REGION_RES, LockSet, region_key, user_key
+from .notifications import notify_cells_taken
 from .resources import Resources
 
 log = logging.getLogger("looprun.processing")
@@ -176,6 +177,9 @@ async def _claim_cells(res: Resources, run: dict, processed: eng.ProcessedRun, c
                 },
             )
         lock.check()
+        # one "cells taken" notification per victim, written inside the lock and before the run is finished (a crash
+        # after _finish would lose it); idempotent, so a redelivery repeats it harmlessly
+        await notify_cells_taken(res, run["_id"], plan["user_id"])
         await _finish(res, run["_id"], processed, plan["claimed"], plan["taken"], plan.get("claimed_cells"))
         return {"skipped": False, "claimed": plan["claimed"], "taken": plan["taken"], "changes": plan["changes"]}
 

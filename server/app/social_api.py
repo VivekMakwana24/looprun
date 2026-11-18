@@ -23,11 +23,15 @@ from .models import (
     FollowState,
     KudosState,
     LostCell,
+    MarkRead,
+    Notification,
+    NotificationPage,
     Profile,
     Rival,
     Rivalry,
     RunPage,
     TakeBack,
+    UnreadCount,
     UserList,
     UserListItem,
     UserPage,
@@ -534,3 +538,89 @@ async def battles_take_back(user: dict = Depends(social.reader), res: Resources 
             )
         )
     return TakeBack(cells=out)
+
+
+# ---------------------------------------------------------------- notifications inbox
+async def _dead_actors(res: Resources, q: dict) -> set[str]:
+    actors = set(await res.db.notifications.distinct("actor_id", q)) - {None}
+    return actors - set(await social.live_users(res, actors))
+
+
+async def _unread(res: Resources, me: str, now: int, excluded: set[str]) -> int:
+    base = {"user_id": me, "read": False, "visible_at": {"$lte": now}}
+    dead = await _dead_actors(res, base)
+    return await res.db.notifications.count_documents({**base, "actor_id": {"$nin": sorted(excluded | dead)}})
+
+
+async def _notification_items(res: Resources, me: str, rows: list[dict]) -> list[Notification]:
+    users = await social.live_users(res, [r["actor_id"] for r in rows if r.get("actor_id")])
+    taken = [r for r in rows if r["type"] == "cells_taken"]
+    split: dict[str, list[int]] = {}  # notification id -> [named cells, unattributed cells]
+    if taken:
+        by_run = {r["run_id"]: r["_id"] for r in taken}
+        events = [e async for e in res.db.battle_events.find({"run_id": {"$in": list(by_run)}, "victim_id": me})]
+        oks, _ = await social.name_ok_many(res, me, [(e, e["taker_id"]) for e in events])
+        for e, ok in zip(events, oks, strict=True):
+            split.setdefault(by_run[e["run_id"]], [0, 0])[0 if ok else 1] += 1
+    out: list[Notification] = []
+    for r in rows:
+        actor = users.get(r.get("actor_id"))
+        if actor is None:
+            continue  # the actor is gone: nothing to show
+        item = Notification(
+            id=r["_id"], type=r["type"], created_at=r["visible_at"], read=bool(r["read"]),
+            actor=social.user_ref(actor, me),  # type: ignore[arg-type]
+            run_id=r.get("run_id"), comment_id=r.get("comment_id"), comment_preview=r.get("comment_preview"),
+        )  # fmt: skip
+        if r["type"] == "cells_taken":
+            named, hidden = split.get(r["_id"], [0, 0])
+            item.cells, item.cells_unattributed = named, hidden
+            item.run_id = None  # the taker's run is never sent
+            if named == 0:
+                item.actor = None
+        out.append(item)
+    return out
+
+
+@router.get("/notifications", response_model=NotificationPage, responses=errs(401, 403, 422, 429))
+async def notifications(
+    limit: int | None = None,
+    cursor: str | None = None,
+    user: dict = Depends(social.reader),
+    res: Resources = Depends(auth.get_res),
+) -> NotificationPage:
+    me, now = user["_id"], res.clock()
+    n = social.parse_limit(limit)
+    c = social.decode_cursor(cursor, 2)
+    excluded = await block_ids(res, me)
+    q: dict = {"user_id": me, "visible_at": {"$lte": now}, "actor_id": {"$nin": sorted(excluded)}}
+    if c:
+        q["$or"] = [{"visible_at": {"$lt": c[0]}}, {"visible_at": c[0], "_id": {"$lt": c[1]}}]
+    rows = [r async for r in res.db.notifications.find(q).sort([("visible_at", -1), ("_id", -1)]).limit(n + 1)]
+    more = len(rows) > n
+    rows = rows[:n]
+    return NotificationPage(
+        items=await _notification_items(res, me, rows),
+        next_cursor=social.encode_cursor(rows[-1]["visible_at"], rows[-1]["_id"]) if more else None,
+        unread_count=await _unread(res, me, now, excluded),
+    )
+
+
+@router.get("/notifications/unread-count", response_model=UnreadCount, responses=errs(401, 403, 429))
+async def unread_count(user: dict = Depends(social.reader), res: Resources = Depends(auth.get_res)) -> UnreadCount:
+    return UnreadCount(unread_count=await _unread(res, user["_id"], res.clock(), await block_ids(res, user["_id"])))
+
+
+@router.post("/notifications/read", status_code=204, responses=errs(401, 403, 422))
+async def mark_read(
+    body: MarkRead, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
+) -> Response:
+    """Exactly one of `ids` (the caller's own; others are ignored) or `all: true`."""
+    me, now = user["_id"], res.clock()
+    if body.all == bool(body.ids):
+        raise social.err(422, "bad_request", "Send either ids or all=true, not both and not neither")
+    q: dict = {"user_id": me, "visible_at": {"$lte": now}}
+    if not body.all:
+        q["_id"] = {"$in": body.ids}
+    await res.db.notifications.update_many(q, {"$set": {"read": True}})
+    return Response(status_code=204)
