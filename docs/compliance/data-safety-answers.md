@@ -34,7 +34,7 @@ Path: **Policy and programs > App content > Data safety**.
 
 ### Open decision: map tile provider
 
-The app downloads map tiles from [MAP_TILE_PROVIDER] (development default `demotiles.maplibre.org`). That host sees the device IP and the viewed area. Decide with the provider's terms in hand whether to declare approximate location as **shared** (conservative) or to treat the provider as a service provider. Do not publish while this is open. **[Unverified Play interpretation.]**
+The app downloads map tiles from [MAP_TILE_PROVIDER] (default `OpenFreeMap (tiles.openfreemap.org)`). That host sees the device IP and the viewed area. Decide with the provider's terms in hand whether to declare approximate location as **shared** (conservative) or to treat the provider as a service provider. Do not publish while this is open. **[Unverified Play interpretation.]**
 
 On-device data: the raw GPS of finished runs stays in the app's local database until the account is deleted or the app uninstalled. Data that never leaves the device is not collected in Play's definition, so no row is added, but the privacy policy says so ("What stays on your phone"). The live-update WebSocket sends the viewed map area (not the user's position) and the auth token; this is covered by the rows above and adds no new data type.
 

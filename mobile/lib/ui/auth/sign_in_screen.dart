@@ -276,18 +276,21 @@ class _TrackPainter extends CustomPainter {
       canvas.drawCircle(centre, r, lanePaint);
     }
     final arc = Rect.fromCircle(center: centre, radius: 180);
+    // Both arcs start above the lane numbers (the numbers sit at y 220-240, the arc starts at y ~202), so
+    // the accent never crosses the "2". The mockup draws it from the start line through the number.
+    const arcStart = math.pi + 0.27;
     canvas.drawArc(
       arc,
-      math.pi,
-      math.pi / 2,
+      arcStart,
+      math.pi / 2 - 0.27,
       false,
       Paint()
         ..color = accent.withValues(alpha: 0.16)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 30,
     );
-    // From the start line (just below it) up the bend to the runner.
-    const from = math.pi - 0.2189; // atan2(39, -175.4)
+    // From just above the lane numbers up the bend to the runner.
+    const from = arcStart;
     const to = math.pi + 1.0415; // the runner at (300, 94.1)
     canvas.drawArc(
       arc,

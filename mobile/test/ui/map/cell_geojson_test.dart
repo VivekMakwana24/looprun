@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:looprun/core/app_theme_id.dart';
 import 'package:looprun/data/models/models.dart';
 import 'package:looprun/ui/map/cell_geojson.dart';
 
@@ -75,9 +76,28 @@ void main() {
     expect(builtInMapStyle('#000000'), isNot(contains('http')));
   });
 
-  test('mapStyleFor uses the configured URL, else the built-in style', () {
-    expect(mapStyleFor(styleUrl: 'https://tiles.example/style.json', backgroundHex: '#000000'),
-        'https://tiles.example/style.json');
-    expect(mapStyleFor(styleUrl: '', backgroundHex: '#123456'), startsWith('{'));
+  group('style choice', () {
+    test('dawn gets Positron, every dark theme gets the dark style', () {
+      expect(networkStyleFor(AppThemeId.dawn), 'https://tiles.openfreemap.org/styles/positron');
+      for (final t in [AppThemeId.night, AppThemeId.tartan, AppThemeId.trail]) {
+        expect(networkStyleFor(t), 'https://tiles.openfreemap.org/styles/dark', reason: t.name);
+      }
+    });
+
+    test('MAP_STYLE_URL overrides the choice for every theme', () {
+      for (final t in AppThemeId.values) {
+        expect(networkStyleFor(t, override: 'https://tiles.example/style.json'), 'https://tiles.example/style.json');
+      }
+    });
+
+    test('mapStyleFor returns the network style, or the built-in one as the fallback', () {
+      expect(mapStyleFor(theme: AppThemeId.night, styleUrl: '', backgroundHex: '#000000'), openFreeMapDark);
+      expect(mapStyleFor(theme: AppThemeId.dawn, styleUrl: '', backgroundHex: '#000000'), openFreeMapPositron);
+      expect(mapStyleFor(theme: AppThemeId.dawn, styleUrl: 'https://x.example/s', backgroundHex: '#000000'),
+          'https://x.example/s');
+      final fallback = mapStyleFor(theme: AppThemeId.night, styleUrl: '', backgroundHex: '#123456', useFallback: true);
+      expect(fallback, startsWith('{'));
+      expect(fallback, isNot(contains('http')));
+    });
   });
 }

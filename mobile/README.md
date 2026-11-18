@@ -36,15 +36,25 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 | `API_BASE_URL` | `http://10.0.2.2:8000` | Server origin; `/v1` is appended. Release builds refuse anything but `https://` |
 | `DEV_AUTH` | `true` in debug builds | Dev login (`id_token = "dev:<name>"`). Pass `false` to hide it in a debug build. Never available in release builds, whatever is passed |
 | `GOOGLE_SERVER_CLIENT_ID` | `623419287179-qsuu...apps.googleusercontent.com` | OAuth client of type **Web application** (project of the dev server), so Google returns an ID token the server can verify |
-| `MAP_TILE_PROVIDER` | placeholder | Name shown in the location disclosure (must be real in release) |
+| `MAP_TILE_PROVIDER` | `OpenFreeMap (tiles.openfreemap.org)` | Name shown in the location disclosure; set it together with `MAP_STYLE_URL` if you change the map server |
 | `PRIVACY_POLICY_URL` | placeholder | Opened by the Privacy Policy links (must be `https://` in release) |
-| `MAP_STYLE_URL` | empty | MapLibre style JSON URL. Empty = built-in plain style (background in the theme's map colour, no tiles, no map server contacted) |
+| `MAP_STYLE_URL` | empty | Override of the MapLibre style URL. Empty = OpenFreeMap by theme (below) |
 
 A release build whose settings are missing or placeholders starts with a screen saying so instead of
 the app (`releaseConfigProblems` in `lib/core/config.dart`).
 
 Google sign-in on Android also needs an OAuth client of type Android (package `app.looprun.looprun`
 plus the signing key SHA-1) in the same Google Cloud project. That is console configuration, not code.
+
+## Map
+
+Real streets come from [OpenFreeMap](https://openfreemap.org) (free, no API key, vector tiles from
+`tiles.openfreemap.org`). The style follows the theme: `positron` for dawn, `dark` for night, tartan and trail
+(`networkStyleFor` in `lib/ui/map/cell_geojson.dart`). `MAP_STYLE_URL` overrides it for every theme. The map
+is rebuilt on a theme change and the hexagon layers are added again on top of the new style. The attribution
+button ("OpenFreeMap (c) OpenMapTiles, data from OpenStreetMap", required) is MapLibre's own and stays on.
+maplibre_gl has no style-load error callback, so if the network style has not loaded after 20 s the map falls
+back to the built-in plain background (no tiles) until the next theme change.
 
 ## Troubleshooting
 

@@ -31,8 +31,14 @@ void main() {
       expect(check(api: 'http://10.0.2.2:8000').single, contains('API_BASE_URL'));
       expect(check(tiles: AppConfig.tileProviderPlaceholder).single, contains('MAP_TILE_PROVIDER'));
       expect(check(policy: AppConfig.privacyPolicyPlaceholder).single, contains('PRIVACY_POLICY_URL'));
-      expect(check(style: '').single, contains('MAP_STYLE_URL'));
+      expect(check(style: 'http://tiles.example/s.json').single, contains('MAP_STYLE_URL'));
       expect(check(google: '').single, contains('GOOGLE_SERVER_CLIENT_ID'));
+    });
+
+    test('an empty MAP_STYLE_URL (OpenFreeMap) is fine, and the default provider names it', () {
+      expect(check(style: ''), isEmpty);
+      expect(AppConfig.mapTileProvider, 'OpenFreeMap (tiles.openfreemap.org)');
+      expect(check(tiles: AppConfig.defaultMapTileProvider), isEmpty);
     });
 
     test('the defaults of a plain debug build would not pass as a release', () {

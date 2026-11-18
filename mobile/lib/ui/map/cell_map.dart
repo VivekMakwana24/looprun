@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -37,6 +38,13 @@ class _CellMapState extends ConsumerState<CellMap> {
   bool _layersReady = false;
   bool _centredOnce = false;
 
+  /// maplibre_gl has no style-load error callback, so a style that has not loaded after this long is
+  /// treated as failed and the built-in plain style is shown instead (until the next theme change).
+  static const Duration _styleTimeout = Duration(seconds: 20);
+  Timer? _styleTimer;
+  bool _styleLoaded = false;
+  bool _useFallback = false;
+
   /// Where the camera was, so a theme change (which rebuilds the map view) keeps the place.
   CameraPosition _camera = const CameraPosition(target: LatLng(50.0, 8.7), zoom: 13);
 
@@ -66,6 +74,7 @@ class _CellMapState extends ConsumerState<CellMap> {
 
   @override
   void dispose() {
+    _styleTimer?.cancel();
     widget.recenter.removeListener(_recenter);
     super.dispose();
   }
@@ -104,6 +113,8 @@ class _CellMapState extends ConsumerState<CellMap> {
   Future<void> _onStyleLoaded() async {
     final c = _controller;
     if (c == null || !mounted) return;
+    _styleTimer?.cancel();
+    _styleLoaded = true;
     final colors = context.lr;
     _layersReady = false;
     try {
@@ -283,13 +294,30 @@ class _CellMapState extends ConsumerState<CellMap> {
       _controller = null;
       _layersReady = false;
       _themeId = themeId;
+      _useFallback = false;
+      _styleLoaded = false;
+      _styleTimer?.cancel();
+      _styleTimer = Timer(_styleTimeout, () {
+        if (!mounted || _styleLoaded || _useFallback) return;
+        // The network style never loaded: rebuild the map view with the built-in style.
+        setState(() {
+          _controller = null;
+          _layersReady = false;
+          _useFallback = true;
+        });
+      });
     }
     ref.listen<List<Cell>>(mapViewModelProvider.select((s) => s.cells), (previous, next) {
       _draw(next);
     });
     return MapLibreMap(
-      key: ValueKey<String>('cell_map_${themeId.name}'),
-      styleString: mapStyleFor(styleUrl: AppConfig.mapStyleUrl, backgroundHex: hexOf(colors.map)),
+      key: ValueKey<String>('cell_map_${themeId.name}${_useFallback ? '_offline' : ''}'),
+      styleString: mapStyleFor(
+        theme: themeId,
+        styleUrl: AppConfig.mapStyleUrl,
+        backgroundHex: hexOf(colors.map),
+        useFallback: _useFallback,
+      ),
       initialCameraPosition: _camera,
       onMapCreated: _onMapCreated,
       onStyleLoadedCallback: _onStyleLoaded,
@@ -298,6 +326,10 @@ class _CellMapState extends ConsumerState<CellMap> {
       featureTapsTriggersMapClick: true,
       trackCameraPosition: true,
       compassEnabled: false,
+      // OpenFreeMap requires "OpenFreeMap (c) OpenMapTiles, data from OpenStreetMap": MapLibre's own
+      // attribution (i) button carries it, so it stays on screen.
+      attributionEnabled: true,
+      attributionButtonPosition: AttributionButtonPosition.bottomRight,
     );
   }
 }

@@ -18,14 +18,16 @@ class AppConfig {
     defaultValue: '623419287179-qsuu1f445he87kb6bomk1lp40fnmadk9.apps.googleusercontent.com',
   );
 
-  /// Shown in the location disclosure. Set both for release builds.
+  /// Shown in the location disclosure; must match the host of the map style. The default names the
+  /// OpenFreeMap public instance, which the app uses unless MAP_STYLE_URL points elsewhere (then set this too).
+  static const String defaultMapTileProvider = 'OpenFreeMap (tiles.openfreemap.org)';
   static const String mapTileProvider =
-      String.fromEnvironment('MAP_TILE_PROVIDER', defaultValue: tileProviderPlaceholder);
+      String.fromEnvironment('MAP_TILE_PROVIDER', defaultValue: defaultMapTileProvider);
   static const String privacyPolicyUrl =
       String.fromEnvironment('PRIVACY_POLICY_URL', defaultValue: privacyPolicyPlaceholder);
 
-  /// MapLibre style JSON URL. Empty (the default) means the built-in style: a plain background in the
-  /// theme's map colour, no tiles and no request to any map server.
+  /// Optional override of the MapLibre style JSON URL. Empty (the default) means OpenFreeMap, chosen by
+  /// theme (see networkStyleFor in ui/map/cell_geojson.dart).
   static const String mapStyleUrl = String.fromEnvironment('MAP_STYLE_URL', defaultValue: '');
 
   static const String tileProviderPlaceholder = '[MAP_TILE_PROVIDER]';
@@ -52,8 +54,8 @@ List<String> releaseConfigProblems({
   if (!privacyPolicyUrl.startsWith('https://')) {
     problems.add('PRIVACY_POLICY_URL must be an https:// address');
   }
-  if (!mapStyleUrl.startsWith('https://')) {
-    problems.add('MAP_STYLE_URL must be an https:// address (the disclosure names a map provider)');
+  if (mapStyleUrl.isNotEmpty && !mapStyleUrl.startsWith('https://')) {
+    problems.add('MAP_STYLE_URL must be empty (OpenFreeMap) or an https:// address');
   }
   if (googleServerClientId.isEmpty) {
     problems.add('GOOGLE_SERVER_CLIENT_ID is not set');

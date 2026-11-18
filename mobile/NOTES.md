@@ -21,9 +21,20 @@ Architecture: docs/MOBILE_ARCHITECTURE.md (views + Riverpod notifier view models
   others at 0.88, private with a dashed line layer), a circle layer fallback for cells without a boundary
   (`ui/map/cell_geojson.dart`, `cell_map.dart`). One `setGeoJsonSource` per change (review F17). Fading = own cell with
   `strength < 0.5`; the notice counts those in view and is hidden at zero; no day estimates are shown.
-- **Map style:** `MAP_STYLE_URL` empty (default) = built-in style with only a background layer in the theme's `map`
-  colour: no tiles, no request to any map server. The map view is rebuilt (keyed by theme) when the theme changes,
-  keeping the camera. The phone's position is drawn as a dot only after it was read (map open, recentre), never tracked.
+- **Map style:** OpenFreeMap by default (no key): `positron` for dawn, `dark` for night/tartan/trail;
+  `MAP_STYLE_URL` overrides. URLs checked (2026-11-18): hyperknot/openfreemap-styles README (HEAD 006ea57) names
+  `https://tiles.openfreemap.org/styles/dark` and `/styles/fiord` ("dark" is the dark style, fiord a second one) and
+  lists bright/liberty/positron/dark/fiord under `styles/`; hyperknot/openfreemap (HEAD 58e20d9) uses
+  `https://tiles.openfreemap.org/styles/liberty` in `linux_host/deploy_linux_host.py` and links `/styles/bright` and
+  `/styles/positron` in its docs; its README "Attribution" section requires "OpenFreeMap (c) OpenMapTiles Data
+  from OpenStreetMap" and says MapLibre adds it automatically (attribution button kept enabled). The map view is
+  rebuilt (keyed by theme) on a theme change, keeping the camera, and the hexagon layers are re-added after every
+  style load, so they sit on top. maplibre_gl exposes no style-load error callback: a 20 s watchdog on
+  `onStyleLoadedCallback` switches to the built-in plain style (background only) until the next theme change.
+  Not verified on a device (no tiles reachable from the dev sandbox; tiles.openfreemap.org returned 403 to curl here).
+  The phone's position is drawn as a dot only after it was read (map open, recentre), never tracked.
+- **Sign-in track:** the accent arc now starts above the lane numbers (y ~202 vs numbers at 220-240) so it never
+  crosses the "2"; docs/design/SignIn.dc.html draws it from the start line through the number (same bug in the mockup).
 - **Numbers shown are the server's:** cells held / rank this week from leaderboard `me`; rest-day quota from `GET /me`;
   result splits from the run status. Unknown = `--` or "Not yet", never 0.
 - **Loop gap** (`domain/recorder/loop_gap.dart`, pure Dart): distance from the newest point to the nearest earlier point

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../core/app_theme_id.dart';
+
 import '../../data/models/models.dart';
 
 /// How a cell is drawn. The value is also the GeoJSON `kind` property the map layers filter on.
@@ -88,8 +90,8 @@ Map<String, dynamic> pointGeoJson(double? lat, double? lng) {
   ]);
 }
 
-/// The built-in MapLibre style used when no MAP_STYLE_URL is configured: one background layer in the
-/// theme's map colour. It has no sources, so nothing is requested from any map server.
+/// The built-in MapLibre style, the fallback when the network style does not load: one background layer in
+/// the theme's map colour. It has no sources, so nothing is requested from any map server.
 String builtInMapStyle(String backgroundHex) {
   return jsonEncode(<String, dynamic>{
     'version': 8,
@@ -105,6 +107,25 @@ String builtInMapStyle(String backgroundHex) {
   });
 }
 
-/// The style to load: the configured URL, or the built-in plain style in the given colour.
-String mapStyleFor({required String styleUrl, required String backgroundHex}) =>
-    styleUrl.isEmpty ? builtInMapStyle(backgroundHex) : styleUrl;
+/// OpenFreeMap styles (https://openfreemap.org, no API key). Names checked against
+/// hyperknot/openfreemap (README, deploy script) and hyperknot/openfreemap-styles (README); see NOTES.md.
+const String openFreeMapPositron = 'https://tiles.openfreemap.org/styles/positron';
+const String openFreeMapLiberty = 'https://tiles.openfreemap.org/styles/liberty';
+const String openFreeMapDark = 'https://tiles.openfreemap.org/styles/dark';
+
+/// The network style for a theme when no MAP_STYLE_URL override is set: the light Positron for the light
+/// theme (dawn), the dark style for every dark theme (night, tartan, trail).
+String networkStyleFor(AppThemeId theme, {String override = ''}) {
+  if (override.isNotEmpty) return override;
+  return theme == AppThemeId.dawn ? openFreeMapPositron : openFreeMapDark;
+}
+
+/// The style to load: the network style for the theme (or the override), or, when it did not load
+/// ([useFallback]), the built-in plain style in the given colour.
+String mapStyleFor({
+  required AppThemeId theme,
+  required String styleUrl,
+  required String backgroundHex,
+  bool useFallback = false,
+}) =>
+    useFallback ? builtInMapStyle(backgroundHex) : networkStyleFor(theme, override: styleUrl);
