@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 
 import '../models/api_exception.dart';
 import '../models/models.dart';
@@ -67,6 +68,12 @@ class DioApiService implements ApiService {
     try {
       return await call();
     } on DioException catch (e) {
+      if (kDebugMode) {
+        // Debug builds only: the real cause behind "Can't reach the server" (refused, timeout,
+        // cleartext blocked...). Method, URL and error only: never headers, so never the token.
+        debugPrint('Looprun API ${e.requestOptions.method} ${e.requestOptions.uri} failed: '
+            '${e.type.name} ${e.response?.statusCode ?? ''} ${e.error ?? e.message ?? ''}');
+      }
       if (e.error is FormatException) throw const ApiException.malformed(unexpectedAnswerMessage);
       final code = e.response?.statusCode;
       if (code == 401) _onUnauthorized?.call();
