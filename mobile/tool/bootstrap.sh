@@ -17,4 +17,15 @@ cp -R "$TMP/gen/android/." "$HERE/android/"
 cp "$TMP/AndroidManifest.looprun.xml" "$MANIFEST"
 
 bash "$HERE/tool/patch_android.sh" "$HERE/android"
+
+# Android Studio / IntelliJ project files. Without the Dart module file the IDE does not
+# treat lib/ as part of the project and refuses to run lib/main.dart ("Entrypoint isn't
+# within the current project"). Only copied when missing, so the user's own IDE settings
+# are never overwritten. Delete .idea/ and looprun.iml and re-run to regenerate them.
+for f in looprun.iml .idea; do
+  if [ -e "$TMP/gen/$f" ] && [ ! -e "$HERE/$f" ]; then
+    cp -R "$TMP/gen/$f" "$HERE/$f"
+    echo "bootstrap: added IDE file $f"
+  fi
+done
 echo "bootstrap done: now run 'flutter pub get'"
