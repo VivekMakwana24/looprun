@@ -17,8 +17,8 @@ from .cellview import build_views
 from .errors import RETRYABLE, LockTimeout
 from .events import iso_week
 from .freeze import quota_ok, rebase_for_freeze, settle_freeze, used_days
-from .leaderboard import cached_public_counts, weekly_rows
 from .leaderboard import public_counts as _public_counts  # noqa: F401 - kept importable from here
+from .leaderboard import weekly_rows
 from .models import (
     CellsResponse,
     FreezeRequest,
@@ -27,7 +27,6 @@ from .models import (
     HomeZonesRequest,
     LeaderboardResponse,
     MeResponse,
-    Profile,
     RenameRequest,
     RenameResponse,
     ReportRequest,
@@ -312,29 +311,6 @@ async def rename_me(
         {"_id": user["_id"]}, {"$set": {"name": name, "name_lower": social.name_key(name), "name_hidden": False}}
     )
     return RenameResponse(user=UserRef(id=user["_id"], name=name))
-
-
-@router.get("/users/{user_id}", response_model=Profile, responses=errs(401, 403, 404, 422, 429))
-async def get_profile(
-    user_id: str, viewer: dict = Depends(social.reader), res: Resources = Depends(auth.get_res)
-) -> Profile:
-    me = viewer["_id"]
-    target = await social.visible_user(res, me, user_id)
-    rows, own = await weekly_rows(res, me)
-    counts = await cached_public_counts(res)
-    f = res.db.follows
-    return Profile(
-        id=user_id,
-        name=social.user_ref(target, me)["name"],
-        cells_held=own if user_id == me else counts.get(user_id, 0),
-        weekly_rank=next((i + 1 for i, r in enumerate(rows) if r[2] == user_id), None),
-        followers_count=await f.count_documents({"followee_id": user_id}),
-        following_count=await f.count_documents({"follower_id": user_id}),
-        joined_at=target["created_at"],
-        is_me=user_id == me,
-        is_following=user_id != me and await f.find_one({"_id": f"{me}:{user_id}"}, {"_id": 1}) is not None,
-        follows_me=user_id != me and await f.find_one({"_id": f"{user_id}:{me}"}, {"_id": 1}) is not None,
-    )
 
 
 @router.put("/me/home-zones", status_code=204, responses=errs(401, 403, 422))

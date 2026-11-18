@@ -151,3 +151,19 @@ def test_real_mongo_profile_rename_and_follow_indexes(real_db):
         uniq = [i for i in follows.values() if i.get("unique")]
         assert [list(i["key"]) for i in uniq] == [["follower_id", "followee_id"]]
         assert "name_lower_1" in {i["name"] for i in real_db.users.list_indexes()}
+
+
+def test_real_mongo_follow_search_notifications(real_db):
+    with _real_client() as client:
+        tag = uuid.uuid4().hex[:5]
+        a, b = login(client, f"fa{tag}"), login(client, f"fb{tag}")
+        for _ in range(2):  # idempotent: the unique index and the upsert agree
+            r = client.put(f"/v1/users/{b['_uid']}/follow", headers=hdr(a))
+            assert r.status_code == 200 and r.json() == {"is_following": True, "followers_count": 1}
+        assert real_db.follows.count_documents({}) == 1 and real_db.notifications.count_documents({}) == 1
+        got = client.get("/v1/users/search", params={"q": f"FB{tag}"[:4]}, headers=hdr(a)).json()["users"]
+        assert [u["id"] for u in got] == [b["_uid"]]
+        assert client.get("/v1/me/following", headers=hdr(a)).json()["items"][0]["id"] == b["_uid"]
+        ttl = _ttl(real_db, "notifications")
+        assert any(list(i["key"]) == ["expire_at"] and i["expireAfterSeconds"] == 0 for i in ttl), ttl
+        assert client.put(f"/v1/users/{a['_uid']}/follow", headers=hdr(a)).json()["detail"]["code"] == "self"

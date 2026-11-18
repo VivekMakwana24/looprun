@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from . import api, live
+from . import api, live, social_api
 from . import engine_adapter as eng
 from .auth import GoogleVerifier, google_verify
 from .bodylimit import BodyLimitMiddleware
@@ -75,5 +75,6 @@ def create_app(
         return JSONResponse({"status": "ok"})
 
     app.include_router(api.router)
+    app.include_router(social_api.router)
     app.include_router(live.router)
     return app

@@ -164,3 +164,24 @@ class ReportRequest(BaseModel):
     kind: Literal["run", "cell"]
     target_id: str = Field(min_length=1, max_length=100)
     reason: str = Field(min_length=1, max_length=500)
+
+
+class UserListItem(BaseModel):
+    id: str
+    name: str
+    is_following: bool
+    follows_me: bool
+
+
+class UserPage(BaseModel):
+    items: list[UserListItem]
+    next_cursor: str | None = None
+
+
+class UserList(BaseModel):
+    users: list[UserListItem]
+
+
+class FollowState(BaseModel):
+    is_following: bool
+    followers_count: int

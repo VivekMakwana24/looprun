@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import Depends, HTTPException
 
 from . import auth
+from . import engine_adapter as eng
 from .profanity import name_key  # noqa: F401 - re-exported
 from .ratelimit import hit_rate_limit
 from .resources import Resources
@@ -118,3 +119,57 @@ def decode_cursor(cursor: str | None, n: int) -> list[Any] | None:
     except (ValueError, TypeError):
         pass
     raise err(422, "bad_cursor", "Bad cursor")
+
+
+# ---------------------------------------------------------------- battle events: who may be named
+def event_visible(ev: dict, now: int, delay_ms: int) -> bool:
+    """Nobody (the two parties included) learns of a battle before the map shows it."""
+    return now >= ev["at"] + delay_ms
+
+
+async def name_ok_many(
+    res: Resources, viewer: str, pairs: list[tuple[dict, str | None]]
+) -> tuple[list[bool], dict[str, dict]]:
+    """name_ok(ev, user_id) for many (event, user) pairs with one users query and one blocks query.
+
+    The named user may be shown for the event when K-anonymity held at claim time (`ev.k_ok`), the cell is not in any
+    of their current home zones, they are a live user with a visible name, and they are not blocked with the viewer.
+    Returns the answers (aligned with `pairs`) and the live users by id (to build UserRefs)."""
+    ids = {u for _, u in pairs if u}
+    users = await live_users(res, ids)
+    hidden_from = await blocked_with(res, viewer, ids)
+    zones = {
+        uid: [(z["lat"], z["lng"], z["radius_m"]) for z in u.get("home_zones", [])] for uid, u in users.items()
+    }
+    out: list[bool] = []
+    for ev, uid in pairs:
+        ok = bool(
+            uid
+            and ev.get("k_ok")
+            and uid in users
+            and not users[uid].get("name_hidden")
+            and uid not in hidden_from
+            and not (zones[uid] and eng.in_home_zone(ev["cell"], zones[uid]))
+        )
+        out.append(ok)
+    return out, users
+
+
+async def follow_flags(res: Resources, viewer: str, ids: Any) -> tuple[set[str], set[str]]:
+    """(ids the viewer follows, ids that follow the viewer) among `ids`, two queries."""
+    wanted = sorted(set(ids) - {viewer})
+    if not wanted:
+        return set(), set()
+    f = res.db.follows
+    mine = {r["followee_id"] async for r in f.find({"follower_id": viewer, "followee_id": {"$in": wanted}})}
+    theirs = {r["follower_id"] async for r in f.find({"followee_id": viewer, "follower_id": {"$in": wanted}})}
+    return mine, theirs
+
+
+def list_item(user: dict, viewer: str, following: set[str], followers: set[str]) -> dict:
+    return {
+        "id": user["_id"],
+        "name": user_ref(user, viewer)["name"],
+        "is_following": user["_id"] in following,
+        "follows_me": user["_id"] in followers,
+    }
