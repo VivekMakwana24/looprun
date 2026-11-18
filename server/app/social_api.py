@@ -2,15 +2,29 @@
 
 from __future__ import annotations
 
+import unicodedata
+import uuid
 from typing import Literal
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 
-from . import auth, social
+from . import auth, profanity, social
 from .api import errs
-from .cards import build_cards
+from .cards import block_ids, build_cards, count_kudos
 from .leaderboard import cached_public_counts, weekly_rows
-from .models import FollowState, Profile, RunPage, UserList, UserListItem, UserPage
+from .models import (
+    Comment,
+    CommentPage,
+    CommentRequest,
+    FollowState,
+    KudosState,
+    Profile,
+    RunPage,
+    UserList,
+    UserListItem,
+    UserPage,
+)
 from .notifications import notify
 from .resources import Resources
 
@@ -265,3 +279,140 @@ async def run_history(
         items=await build_cards(res, me, rows),
         next_cursor=social.encode_cursor(rows[-1]["started_at"], rows[-1]["_id"]) if more else None,
     )
+
+
+# ---------------------------------------------------------------- kudos
+async def _kudos_state(res: Resources, me: str, run_id: str) -> KudosState:
+    excluded = await block_ids(res, me)
+    counts = await count_kudos(res, [run_id], excluded)
+    mine = await res.db.kudos.find_one({"_id": f"{run_id}:{me}"}, {"_id": 1}) is not None
+    return KudosState(kudos_by_me=mine, kudos_count=counts.get(run_id, 0))
+
+
+@router.put("/runs/{run_id}/kudos", response_model=KudosState, responses=errs(401, 403, 404, 422, 429))
+async def give_kudos(run_id: UUID, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)):
+    me, rid = user["_id"], str(run_id)
+    await social.limited(res, "kudos", me, res.settings.social_kudos_rate, 3600)
+    run = await social.visible_run(res, me, rid)
+    if run["user_id"] == me:
+        raise social.err(422, "own_run", "You cannot give kudos to your own run")
+    now = res.clock()
+    r = await res.db.kudos.update_one(
+        {"_id": f"{rid}:{me}"},
+        {"$setOnInsert": {"run_id": rid, "run_owner_id": run["user_id"], "user_id": me, "at": now}},
+        upsert=True,
+    )
+    if r.upserted_id is not None:
+        await notify(
+            res, f"kudos:{rid}:{me}", run["user_id"], "kudos", me, now + res.settings.publish_delay_seconds * 1000,
+            run_id=rid,
+        )  # fmt: skip
+    return await _kudos_state(res, me, rid)
+
+
+@router.delete("/runs/{run_id}/kudos", response_model=KudosState, responses=errs(401, 403, 404, 422, 429))
+async def remove_kudos(run_id: UUID, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)):
+    me, rid = user["_id"], str(run_id)
+    await social.limited(res, "kudos", me, res.settings.social_kudos_rate, 3600)
+    await social.visible_run(res, me, rid)
+    await res.db.kudos.delete_one({"_id": f"{rid}:{me}"})
+    await res.db.notifications.delete_one({"_id": f"kudos:{rid}:{me}"})
+    return await _kudos_state(res, me, rid)
+
+
+# ---------------------------------------------------------------- comments
+def _comment_view(doc: dict, author: dict, me: str, run_owner: str) -> Comment:
+    return Comment(
+        id=doc["_id"],
+        run_id=doc["run_id"],
+        user=social.user_ref(author, me),  # type: ignore[arg-type]
+        text=doc["text"],
+        created_at=doc["created_at"],
+        hidden=bool(doc.get("hidden")),  # only ever true for the author: nobody else is sent a hidden comment
+        can_delete=me in (doc["author_id"], run_owner),
+    )
+
+
+def clean_comment(raw: str) -> str | None:
+    text = raw.strip()
+    if not 1 <= len(text) <= 500 or any(unicodedata.category(c) in {"Cc", "Cs"} for c in text):
+        return None
+    return unicodedata.normalize("NFC", text)
+
+
+@router.get("/runs/{run_id}/comments", response_model=CommentPage, responses=errs(401, 403, 404, 422, 429))
+async def list_comments(
+    run_id: UUID,
+    limit: int | None = None,
+    cursor: str | None = None,
+    user: dict = Depends(social.reader),
+    res: Resources = Depends(auth.get_res),
+) -> CommentPage:
+    me, rid = user["_id"], str(run_id)
+    n = social.parse_limit(limit)
+    c = social.decode_cursor(cursor, 2)
+    run = await social.visible_run(res, me, rid)
+    excluded = await block_ids(res, me)
+    q: dict = {
+        "run_id": rid,
+        "$and": [{"$or": [{"hidden": {"$ne": True}}, {"author_id": me}]}],  # the author still gets their own
+        "author_id": {"$nin": sorted(excluded)},
+    }
+    if c:
+        q["$and"].append({"$or": [{"created_at": {"$gt": c[0]}}, {"created_at": c[0], "_id": {"$gt": c[1]}}]})
+    rows = [d async for d in res.db.comments.find(q).sort([("created_at", 1), ("_id", 1)]).limit(n + 1)]
+    more = len(rows) > n
+    rows = rows[:n]
+    authors = await social.live_users(res, [d["author_id"] for d in rows])
+    return CommentPage(
+        items=[_comment_view(d, authors[d["author_id"]], me, run["user_id"]) for d in rows if d["author_id"] in authors],  # noqa: E501
+        next_cursor=social.encode_cursor(rows[-1]["created_at"], rows[-1]["_id"]) if more else None,
+    )
+
+
+@router.post(
+    "/runs/{run_id}/comments", status_code=201, response_model=Comment, responses=errs(401, 403, 404, 409, 422, 429)
+)
+async def add_comment(
+    run_id: UUID, body: CommentRequest, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
+) -> Comment:
+    s, me, rid = res.settings, user["_id"], str(run_id)
+    await social.limited(res, "comment_burst", me, s.social_comment_burst, 60)
+    await social.limited(res, "comment", me, s.social_comment_rate, 3600)
+    run = await social.visible_run(res, me, rid)
+    text = clean_comment(body.text)
+    if text is None:
+        raise social.err(422, "bad_text", "A comment has 1 to 500 characters and no control characters")
+    if s.filter_comments and not profanity.is_allowed(text, s.profanity_list_path):
+        raise social.err(422, "text_rejected", "This comment cannot be posted")
+    if await res.db.comments.count_documents({"run_id": rid}) >= s.social_max_comments_per_run:
+        raise social.err(409, "comment_limit", f"A run has at most {s.social_max_comments_per_run} comments")
+    now = res.clock()
+    doc = {
+        "_id": uuid.uuid4().hex, "run_id": rid, "run_owner_id": run["user_id"], "author_id": me, "text": text,
+        "created_at": now, "hidden": False,
+    }  # fmt: skip
+    await res.db.comments.insert_one(doc)
+    if run["user_id"] != me:
+        await notify(
+            res, f"comment:{doc['_id']}", run["user_id"], "comment", me, now + s.publish_delay_seconds * 1000,
+            run_id=rid, comment_id=doc["_id"], comment_preview=text[:80],
+        )  # fmt: skip
+    return _comment_view(doc, user, me, run["user_id"])
+
+
+@router.delete(
+    "/runs/{run_id}/comments/{comment_id}", status_code=204, responses=errs(401, 403, 404, 422)
+)
+async def delete_comment(
+    run_id: UUID, comment_id: str, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
+) -> Response:
+    me, rid = user["_id"], str(run_id)
+    run = await social.visible_run(res, me, rid)
+    doc = await res.db.comments.find_one({"_id": comment_id, "run_id": rid})
+    if doc is not None:
+        if me not in (doc["author_id"], run["user_id"]):
+            raise social.err(403, "forbidden", "Only the author or the owner of the run can delete a comment")
+        await res.db.comments.delete_one({"_id": comment_id})
+        await res.db.notifications.delete_one({"_id": f"comment:{comment_id}"})
+    return Response(status_code=204)

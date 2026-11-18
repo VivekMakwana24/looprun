@@ -173,3 +173,34 @@ def list_item(user: dict, viewer: str, following: set[str], followers: set[str])
         "is_following": user["_id"] in following,
         "follows_me": user["_id"] in followers,
     }
+
+
+# ---------------------------------------------------------------- runs
+def published(run: dict, viewer: str, now: int, delay_ms: int) -> bool:
+    return viewer == run["user_id"] or now >= run.get("processed_at", 0) + delay_ms
+
+
+async def can_view_run(res: Resources, viewer: str, run: dict | None) -> bool:
+    """Whether `viewer` may see this run's card (so kudos, comments and reports of it): accepted, not hidden by
+    moderation, owner is a live user, not blocked, and the viewer is the owner or follows them and the run is
+    published. Runs from before phase 1a (no claimed_cells) are not in anybody else's feed, so not here either."""
+    if run is None or run.get("status") != "accepted" or run.get("hidden"):
+        return False
+    owner = run["user_id"]
+    if not live_user(await res.db.users.find_one({"_id": owner})):
+        return False
+    if owner == viewer:
+        return True
+    if await blocked(res, viewer, owner) or "claimed_cells" not in run:
+        return False
+    if await res.db.follows.find_one({"_id": f"{viewer}:{owner}"}, {"_id": 1}) is None:
+        return False
+    return published(run, viewer, res.clock(), res.settings.publish_delay_seconds * 1000)
+
+
+async def visible_run(res: Resources, viewer: str, run_id: str) -> dict:
+    """The run document, or the one 404 (unknown, not published, not followed, hidden, blocked ... look alike)."""
+    run = await res.db.runs.find_one({"_id": run_id})
+    if not await can_view_run(res, viewer, run):
+        raise not_found()
+    return run  # type: ignore[return-value]

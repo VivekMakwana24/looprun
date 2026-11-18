@@ -187,3 +187,23 @@ def test_real_mongo_feed_history_and_battle_cards(real_db):
         assert a_run["_id"] in [c["id"] for c in feed] and "claimed_cells" in a_run
         keys = {tuple(i["key"].keys()) for i in real_db.runs.list_indexes()}
         assert ("user_id", "status", "processed_at", "_id") in keys
+
+
+def test_real_mongo_kudos_and_comments_counts_on_cards(real_db):
+    with _real_client() as client:
+        a = login(client, f"ka{uuid.uuid4().hex[:6]}")
+        b = login(client, f"kb{uuid.uuid4().hex[:6]}")
+        t0 = int(time.time() * 1000) - 7_200_000
+        rid, _ = upload(client, b, square_fixes(t0=t0))
+        assert client.put(f"/v1/users/{b['_uid']}/follow", headers=hdr(a)).status_code == 200
+        # the real publish delay: the run finished just now, so alice cannot see it yet (404, like an unknown run)
+        assert client.put(f"/v1/runs/{rid}/kudos", headers=hdr(a)).status_code == 404
+        real_db.runs.update_one({"_id": rid}, {"$set": {"processed_at": int(time.time() * 1000) - 3_600_000}})
+        assert client.put(f"/v1/runs/{rid}/kudos", headers=hdr(a)).json() == {"kudos_by_me": True, "kudos_count": 1}
+        c = client.post(f"/v1/runs/{rid}/comments", json={"text": "  nice loop "}, headers=hdr(a))
+        assert c.status_code == 201 and c.json()["text"] == "nice loop"
+        card = next(x for x in client.get("/v1/feed", headers=hdr(a)).json()["items"] if x["id"] == rid)
+        assert (card["kudos_count"], card["kudos_by_me"], card["comment_count"]) == (1, True, 1)
+        assert real_db.notifications.count_documents({"type": {"$in": ["kudos", "comment"]}}) == 2
+        assert client.delete(f"/v1/runs/{rid}/comments/{c.json()['id']}", headers=hdr(b)).status_code == 204
+        assert real_db.comments.count_documents({}) == 0

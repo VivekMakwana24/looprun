@@ -215,3 +215,28 @@ class RunCard(BaseModel):
 class RunPage(BaseModel):
     items: list[RunCard]
     next_cursor: str | None = None
+
+
+class KudosState(BaseModel):
+    kudos_by_me: bool
+    kudos_count: int
+
+
+class CommentRequest(BaseModel):
+    # Length and characters are checked in the route (422 bad_text); this only bounds the input size.
+    text: str = Field(max_length=5000)
+
+
+class Comment(BaseModel):
+    id: str
+    run_id: str
+    user: UserRef
+    text: str
+    created_at: int
+    hidden: bool = False
+    can_delete: bool
+
+
+class CommentPage(BaseModel):
+    items: list[Comment]
+    next_cursor: str | None = None
