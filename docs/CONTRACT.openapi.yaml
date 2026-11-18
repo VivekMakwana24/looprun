@@ -56,6 +56,25 @@ paths:
         "422": {description: "Validation error: also NaN/Infinity and numbers outside the allowed range (times must be before year 2100)"}
         "429": {description: Rate limited; the Retry-After header says how many seconds to wait}
         "503": {description: Queue unavailable; nothing was stored, retry with the same id}
+    get:
+      summary: The caller's own run history, newest first (Phase 1a)
+      description: Same card shape as the feed plus status; includes runs that are processing, pending_review or rejected. Full, unfiltered numbers (own runs). Opponent names follow the publish delay and privacy rules.
+      parameters:
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+        - {name: status, in: query, required: false, schema: {type: string, enum: [processing, accepted, pending_review, rejected]}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/RunCard"}}
+                  next_cursor: {type: string, nullable: true}
+        "401": {description: Missing, invalid or expired token}
+        "403": {description: The account is being deleted; every route except DELETE /me refuses it}
+        "422": {description: Bad limit, cursor or status}
   /runs/{id}:
     get:
       summary: Status and result of a run
@@ -197,6 +216,7 @@ paths:
                         lng: {type: number}
                         radius_m: {type: number}
                   freeze: {$ref: "#/components/schemas/FreezeStatus"}
+                  name_hidden: {type: boolean, description: "true when moderation hid the caller's display name from others (Phase 1a)"}
         "401": {description: Missing, invalid or expired token}
         "403": {description: The account is being deleted; every route except DELETE /me refuses it}
     delete:
@@ -205,15 +225,42 @@ paths:
         Resumable. The account is first marked "deleting" (new uploads get 403), cells it held pass to the
         strongest remaining player or become free, then everything is deleted and the user last. If the server is
         busy (or a lock, MongoDB or Redis fails half way) it answers 503 with Retry-After and the call can simply be
-        repeated with the same token. While the account is "deleting" it is already hidden from the map, the
+        repeated with the same token. Phase 1a: it also removes follows, kudos, comments, notifications, blocks and
+        battle events naming the user (docs/PHASE1_SPEC.md section 9). While the account is "deleting" it is already hidden from the map, the
         leaderboard and live frames.
       responses:
         "204": {description: Deleted}
         "401": {description: Missing, invalid or expired token, or the account is already deleted}
         "503": {description: Busy; repeat the request (see Retry-After)}
+    patch:
+      summary: Rename the caller (display name)
+      description: >
+        Length 2..30 after trimming and collapsing inner whitespace; no control characters; must pass the profanity
+        hook. Renaming clears a moderation hide of the old name. Allowed 5 times per 24 hours.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [display_name]
+              properties:
+                display_name: {type: string, minLength: 2, maxLength: 30}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: "#/components/schemas/UserRef"}
+        "401": {description: Missing, invalid or expired token}
+        "403": {description: The account is being deleted; every route except DELETE /me refuses it}
+        "422": {description: "Length, characters, or profanity (code name_rejected)"}
+        "429": {description: Rate limited}
   /reports:
     post:
-      summary: Report a run or a cell
+      summary: Report a run, a cell, a user, a comment or a run card
       requestBody:
         required: true
         content:
@@ -222,11 +269,12 @@ paths:
               type: object
               required: [kind, target_id, reason]
               properties:
-                kind: {type: string, enum: [run, cell]}
+                kind: {type: string, enum: [run, cell, user, comment, run_card], description: "user: target_id is a user id; comment: a comment id; run_card: a run id seen in the feed (the target must be visible to the reporter, else 404). run and cell keep their old behaviour. A repeat report of the same target by the same user is a no-op 202."}
                 target_id: {type: string}
                 reason: {type: string, maxLength: 500}
       responses:
         "202": {description: Recorded}
+        "404": {description: "kind user, comment or run_card: the target is not visible to the reporter"}
         "401": {description: Missing, invalid or expired token}
         "403": {description: The account is being deleted; every route except DELETE /me refuses it}
         "422": {description: Validation error}
@@ -250,6 +298,325 @@ paths:
         see Cell). Other people's changes arrive after the publish delay. Hidden cells are never sent with an owner.
       responses:
         "101": {description: Switching protocols}
+  # ------------------------------------------------------------------ Phase 1a (social + battles), see docs/PHASE1_SPEC.md
+  # Error body for every phase-1a route: {"detail": {"code": "<slug>", "message": "<text>"}}. 401 and 403 (account
+  # being deleted) apply to all of them and are listed once in the spec. Lists use ?limit (1..50, default 20) and an
+  # opaque ?cursor; the response carries next_cursor (null at the end).
+  /users/search:
+    get:
+      summary: Find users by display-name prefix
+      description: Case-insensitive prefix, 2..30 characters. At most 20 results, no paging. Excludes the caller, users being deleted, users whose name moderation hid, and blocked pairs.
+      parameters:
+        - {name: q, in: query, required: true, schema: {type: string, minLength: 2, maxLength: 30}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items: {$ref: "#/components/schemas/UserListItem"}
+        "422": {description: q shorter than 2 or longer than 30}
+        "429": {description: "Rate limited: 30 per minute"}
+  /users/{id}:
+    get:
+      summary: Public profile
+      description: 404 when the user is unknown, being deleted, or blocked in either direction (the caller cannot tell which).
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Profile"}
+        "404": {description: Unknown user, being deleted, or blocked either way}
+  /users/{id}/follow:
+    put:
+      summary: Follow a user (idempotent)
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FollowState"}
+        "404": {description: Unknown user, being deleted, or blocked either way}
+        "409": {description: "Following limit reached (500), code follow_limit"}
+        "422": {description: Cannot follow yourself, code self}
+        "429": {description: "Rate limited: 100 follow or unfollow calls per hour"}
+    delete:
+      summary: Unfollow (idempotent)
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FollowState"}
+        "429": {description: "Rate limited: shared with follow"}
+  /me/followers:
+    get:
+      summary: People who follow the caller, newest first
+      parameters:
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/UserListItem"}}
+                  next_cursor: {type: string, nullable: true}
+        "422": {description: Bad limit or cursor}
+  /me/following:
+    get:
+      summary: People the caller follows, newest first
+      parameters:
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/UserListItem"}}
+                  next_cursor: {type: string, nullable: true}
+        "422": {description: Bad limit or cursor}
+  /me/rivals:
+    get:
+      summary: Users the caller traded cells with in the last 30 days (either direction)
+      description: Only opponents whose name is visible for the cells involved (privacy rules of GET /cells); each is listed once, most recent battle first. At most 50.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items: {$ref: "#/components/schemas/UserListItem"}
+  /feed:
+    get:
+      summary: Accepted runs of people the caller follows, plus the caller's own, newest first
+      description: >
+        Others' runs appear only after the publish delay (own runs at once). Never contains GPS points, start or end
+        points. Runs of the last 90 days only. Cards never include runs of blocked users or runs hidden by moderation.
+      parameters:
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/RunCard"}}
+                  next_cursor: {type: string, nullable: true}
+        "422": {description: Bad limit or cursor}
+  /runs/{id}/kudos:
+    put:
+      summary: Give kudos (idempotent; one per user per run)
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/KudosState"}
+        "404": {description: Run not visible to the caller (not a followed user's published, accepted run, or blocked, or hidden)}
+        "422": {description: Own run, code own_run}
+        "429": {description: "Rate limited: 120 per hour (kudos give and remove together)"}
+    delete:
+      summary: Remove own kudos (idempotent)
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/KudosState"}
+        "404": {description: Run not visible to the caller}
+        "429": {description: Rate limited, shared with give}
+  /runs/{id}/comments:
+    get:
+      summary: Comments on a run the caller may see, oldest first
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/Comment"}}
+                  next_cursor: {type: string, nullable: true}
+        "404": {description: Run not visible to the caller}
+        "422": {description: Bad limit or cursor}
+    post:
+      summary: Add a comment
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: {type: string, minLength: 1, maxLength: 500, description: "Trimmed; empty after trimming is 422"}
+      responses:
+        "201":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Comment"}
+        "404": {description: Run not visible to the caller}
+        "409": {description: "At most 200 comments per run, code comment_limit"}
+        "422": {description: Empty or longer than 500 characters}
+        "429": {description: "Rate limited: 30 per hour, 5 per minute"}
+  /runs/{id}/comments/{comment_id}:
+    delete:
+      summary: Delete a comment (the author, or the owner of the run)
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: comment_id, in: path, required: true, schema: {type: string}}
+      responses:
+        "204": {description: Deleted (also when it was already gone)}
+        "403": {description: The caller is neither the author nor the run owner}
+        "404": {description: Run not visible to the caller}
+  /battles/summary:
+    get:
+      summary: Cells taken and lost by the caller in the last 7 days
+      description: Counts include events whose opponent name is hidden. Events count only after the publish delay.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/BattleSummary"}
+  /battles/rivalry:
+    get:
+      summary: Per-opponent battle totals
+      description: Only opponents whose name is visible for the cells involved; hidden battles appear in `unattributed`. Sorted by taken+lost descending, then last_battle_at. At most 50.
+      parameters:
+        - {name: days, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 90, default: 30}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  days: {type: integer}
+                  rivals:
+                    type: array
+                    items: {$ref: "#/components/schemas/Rival"}
+                  unattributed: {$ref: "#/components/schemas/BattleCounts"}
+        "422": {description: days outside 1..90}
+  /battles/take-back:
+    get:
+      summary: Cells the caller lost in the last 7 days, to draw and win back
+      description: >
+        Cells that currently belong to somebody else (or nobody) and that the caller lost in the last 7 days, newest
+        first, at most 500. `lost_to` is null when the taker's name is hidden (home zone, K-anonymity) or the taker
+        was deleted. A cell the caller has since won back is not listed.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cells:
+                    type: array
+                    items: {$ref: "#/components/schemas/LostCell"}
+  /notifications:
+    get:
+      summary: In-app notifications inbox, newest first
+      description: Only notifications whose visible_at has passed (the publish delay for other people's actions). Items are kept 60 days.
+      parameters:
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/Notification"}}
+                  next_cursor: {type: string, nullable: true}
+                  unread_count: {type: integer}
+        "422": {description: Bad limit or cursor}
+  /notifications/unread-count:
+    get:
+      summary: Number of unread, visible notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread_count: {type: integer}
+  /notifications/read:
+    post:
+      summary: Mark notifications read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids: {type: array, maxItems: 100, items: {type: string}, description: "Mark these read; ids that are not the caller's are ignored"}
+                all: {type: boolean, default: false, description: "Mark every visible notification read; ids must then be empty"}
+      responses:
+        "204": {description: Done}
+        "422": {description: Neither ids nor all, or both}
+  /users/{id}/block:
+    put:
+      summary: Block a user (idempotent)
+      description: Removes follows in both directions, kudos between the two and the notifications between the two. Afterwards neither sees the other in feed, comments, search, rivals, battles lists or profile.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "204": {description: Blocked}
+        "404": {description: Unknown user or being deleted}
+        "409": {description: "At most 500 blocks, code block_limit"}
+        "422": {description: Cannot block yourself, code self}
+        "429": {description: "Rate limited: 30 per hour"}
+    delete:
+      summary: Unblock (idempotent; follows are not restored)
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "204": {description: Done}
+  /me/blocks:
+    get:
+      summary: Users the caller has blocked
+      parameters:
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/UserRef"}}
+                  next_cursor: {type: string, nullable: true}
 components:
   securitySchemes:
     bearer: {type: http, scheme: bearer}
@@ -345,3 +712,117 @@ components:
             power right after their last claim of the cell: 1.0 during the grace period, then falling. A freeze
             holds it at the value it had when the freeze began. The app draws cells below 0.5 as "fading". Running
             through the cell again brings it back to 1.0 (D10, D11).
+    UserListItem:
+      type: object
+      properties:
+        id: {type: string}
+        name: {type: string}
+        is_following: {type: boolean}
+        follows_me: {type: boolean}
+    Profile:
+      type: object
+      properties:
+        id: {type: string}
+        name: {type: string}
+        cells_held: {type: integer, description: "What a stranger sees on GET /cells for this user (published, named); the caller's own profile shows the live number"}
+        weekly_rank: {type: integer, nullable: true, description: "Place on the weekly leaderboard, also beyond the top 100; null when no visible cells"}
+        followers_count: {type: integer}
+        following_count: {type: integer}
+        joined_at: {type: integer, description: epoch ms}
+        is_me: {type: boolean}
+        is_following: {type: boolean}
+        follows_me: {type: boolean}
+    FollowState:
+      type: object
+      properties:
+        is_following: {type: boolean}
+        followers_count: {type: integer}
+    KudosState:
+      type: object
+      properties:
+        kudos_by_me: {type: boolean}
+        kudos_count: {type: integer}
+    TakenFrom:
+      type: object
+      properties:
+        user: {$ref: "#/components/schemas/UserRef"}
+        cells: {type: integer}
+    RunCard:
+      type: object
+      description: Never carries GPS points, loops' geometry or start/end points.
+      properties:
+        id: {type: string, format: uuid}
+        user: {$ref: "#/components/schemas/UserRef"}
+        started_at: {type: integer}
+        distance_m: {type: number, nullable: true}
+        moving_seconds: {type: integer, nullable: true}
+        pace_s_per_km: {type: number, nullable: true, description: "moving_seconds / (distance_m/1000); null under 100 m"}
+        cells_claimed: {type: integer}
+        cells_taken: {type: integer, description: "Of the claimed cells, how many were somebody else's"}
+        taken_from:
+          type: array
+          description: Opponents with a visible name, with the number of cells taken from each
+          items: {$ref: "#/components/schemas/TakenFrom"}
+        taken_from_hidden: {type: integer, description: Cells taken from opponents whose name is hidden}
+        loop_count: {type: integer}
+        kudos_count: {type: integer}
+        kudos_by_me: {type: boolean}
+        comment_count: {type: integer}
+        status: {type: string, enum: [processing, accepted, pending_review, rejected], description: "Always present in GET /runs; in the feed always accepted"}
+    Comment:
+      type: object
+      properties:
+        id: {type: string}
+        run_id: {type: string}
+        user: {$ref: "#/components/schemas/UserRef"}
+        text: {type: string}
+        created_at: {type: integer}
+        hidden: {type: boolean, description: "true only for the author, whose comment moderation hid (others never receive it)"}
+        can_delete: {type: boolean}
+    BattleCounts:
+      type: object
+      properties:
+        taken: {type: integer}
+        lost: {type: integer}
+    BattleSummary:
+      type: object
+      properties:
+        days: {type: integer, example: 7}
+        taken: {type: integer}
+        lost: {type: integer}
+        net: {type: integer}
+        battles: {type: integer, description: "Distinct runs of other people that took cells from the caller, plus the caller's runs that took cells"}
+    Rival:
+      type: object
+      properties:
+        user: {$ref: "#/components/schemas/UserRef"}
+        taken: {type: integer, description: Cells the caller took from them}
+        lost: {type: integer, description: Cells they took from the caller}
+        net: {type: integer}
+        last_battle_at: {type: integer}
+        is_following: {type: boolean}
+    LostCell:
+      type: object
+      properties:
+        cell: {type: string, description: H3 index}
+        lat: {type: number}
+        lng: {type: number}
+        boundary: {type: array, items: {type: array, minItems: 2, maxItems: 2, items: {type: number}}, description: "D10 shape"}
+        lost_at: {type: integer, description: "epoch ms of the claim; the app shows it only after the publish delay"}
+        lost_to: {allOf: [{$ref: "#/components/schemas/UserRef"}], nullable: true}
+    Notification:
+      type: object
+      properties:
+        id: {type: string}
+        type: {type: string, enum: [cells_taken, new_follower, kudos, comment]}
+        created_at: {type: integer, description: "visible_at: when the notification became visible to the caller"}
+        read: {type: boolean}
+        actor: {allOf: [{$ref: "#/components/schemas/UserRef"}], nullable: true, description: "null for cells_taken when every involved name is hidden"}
+        cells: {type: integer, nullable: true, description: "cells_taken: cells taken, attributed to actor"}
+        cells_unattributed: {type: integer, nullable: true, description: "cells_taken: further cells whose taker is hidden"}
+        run_id: {type: string, nullable: true, description: "kudos and comment: the caller's own run"}
+        comment_id: {type: string, nullable: true}
+        comment_preview: {type: string, nullable: true, description: "comment: first 80 characters"}
+  parameters:
+    Limit: {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
+    Cursor: {name: cursor, in: query, required: false, schema: {type: string}, description: "Opaque; pass the previous next_cursor"}
