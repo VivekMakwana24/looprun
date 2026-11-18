@@ -37,6 +37,7 @@ from .conftest import (
     with_flag,
     with_result,
 )
+from .contract_util import PHASE1A_OPS
 
 SECRET = "test-secret-test-secret-test-secret-32b"
 
@@ -986,8 +987,10 @@ def test_contract_paths_methods_and_documented_errors_match_the_app(client):
     for p, ops in contract["paths"].items():
         if p == "/live":
             continue
-        assert norm(p) in app_paths, p
         for method in ops:
+            if (p, method) in PHASE1A_OPS:
+                continue  # checked by test_phase1a_contract.py
+            assert norm(p) in app_paths, p
             assert method in app_paths[norm(p)], (p, method)
     docs = {(p, m): set(op["responses"]) for p, ops in contract["paths"].items() for m, op in ops.items()}
     assert {"401", "422"} <= docs[("/auth/google", "post")] | {"422"}

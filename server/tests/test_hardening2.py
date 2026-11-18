@@ -23,6 +23,7 @@ from app.locks import LockSet, user_key
 from app.worker import enqueue_run, sweep_stuck_runs_task
 
 from .conftest import T0, cells_of, db_run, hdr, login, run_loop, square_fixes, upload
+from .contract_util import PHASE1A_OPS
 from .test_hardening import res_of, seed_run
 
 BBOX = "8.6,49.9,8.8,50.1"
@@ -576,11 +577,13 @@ def test_generated_openapi_documents_the_same_status_codes_as_the_contract(clien
         if p == "/live":
             continue
         for method, op in ops.items():
+            if (p, method) in PHASE1A_OPS:
+                continue  # checked by test_phase1a_contract.py
             codes_c = set(op["responses"])
             codes_g = set(gen["/v1" + p.replace("{id}", "{run_id}")][method]["responses"])
             assert codes_c == codes_g, (method, p, sorted(codes_c ^ codes_g))
             checked += 1
-    assert checked == 10
+    assert checked == 9  # the 10th (POST /reports) changed in Phase 1a and is checked by test_phase1a_contract.py
 
 
 def test_live_contract_documents_403_4401_4429_and_the_socket_cap():

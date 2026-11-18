@@ -72,6 +72,26 @@ class Settings(BaseSettings):
     fixes_retention_days: int = Field(30, ge=1)  # raw GPS of runs that are not accepted (accepted: deleted at once)
     reports_retention_days: int = Field(180, ge=1)
 
+    # --- social (Phase 1a, docs/PHASE1_SPEC.md 0.3 and 0.5) ---
+    social_follow_rate: int = Field(100, ge=1)  # follow + unfollow per hour
+    social_kudos_rate: int = Field(120, ge=1)  # kudos give + remove per hour
+    social_comment_rate: int = Field(30, ge=1)  # comments per hour
+    social_comment_burst: int = Field(5, ge=1)  # comments per minute
+    social_block_rate: int = Field(30, ge=1)  # blocks per hour
+    social_rename_rate: int = Field(5, ge=1)  # renames per 24 hours
+    social_search_rate: int = Field(30, ge=1)  # searches per minute
+    social_read_rate: int = Field(120, ge=1)  # read routes (feed, lists, notifications, battles, profile) per minute
+    social_max_following: int = Field(500, ge=1)
+    social_max_blocks: int = Field(500, ge=1)
+    social_max_comments_per_run: int = Field(200, ge=1)
+    feed_window_days: int = Field(90, ge=1)
+    battle_retention_days: int = Field(90, ge=1)
+    notification_retention_days: int = Field(60, ge=1)
+    moderation_log_retention_days: int = Field(365, ge=1)
+    filter_comments: bool = False  # run comments through the profanity hook (off in 1a)
+    profanity_list_path: str = ""  # empty: the packaged app/data/blocked_terms.txt
+    admin_enabled: bool = True  # the moderation CLI (python -m app.moderation) refuses to run when false
+
     # --- freeze ---
     max_freeze_days: int = Field(30, ge=1, le=30)  # one freeze
     freeze_quota_days: int = Field(30, ge=1)  # at most this many frozen days ...

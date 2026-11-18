@@ -17,7 +17,7 @@ from typing import Any
 from pymongo.errors import DuplicateKeyError
 
 from . import engine_adapter as eng
-from .cellview import change_fields
+from .cellview import _users_in_neighbourhoods, change_fields
 from .errors import RETRYABLE, LockTimeout
 from .events import publish_changes, publish_user_deleted
 from .freeze import settle_expired
@@ -96,7 +96,7 @@ async def _process(res: Resources, run: dict) -> None:
             return
         claimed, taken, changes = claim["claimed"], claim["taken"], claim["changes"]
     else:
-        await _finish(res, run_id, processed, 0, 0)
+        await _finish(res, run_id, processed, 0, 0, [])
     await publish_changes(res.redis, changes)
     log.info(
         "run_processed",
@@ -111,7 +111,14 @@ async def _process(res: Resources, run: dict) -> None:
     )
 
 
-async def _finish(res: Resources, run_id: str, processed: eng.ProcessedRun, claimed: int, taken: int) -> None:
+async def _finish(
+    res: Resources,
+    run_id: str,
+    processed: eng.ProcessedRun,
+    claimed: int,
+    taken: int,
+    claimed_cells: list[str] | None = None,
+) -> None:
     """Write the result into the run, drop or age the raw GPS, and delete the claim plan (it names other users)."""
     db = res.db
     status = processed.status
@@ -127,6 +134,8 @@ async def _finish(res: Resources, run_id: str, processed: eng.ProcessedRun, clai
         "review": "awaiting" if status != "accepted" else None,
         "processed_at": res.clock(),
     }
+    if status == "accepted" and claimed_cells is not None:
+        update["claimed_cells"] = claimed_cells  # only accepted runs; never sent to clients (feed card rules)
     await db.runs.update_one({"_id": run_id}, {"$set": update})
     if status == "accepted":
         await db.run_fixes.delete_one({"_id": run_id})  # clean runs: raw GPS goes at once
@@ -167,7 +176,7 @@ async def _claim_cells(res: Resources, run: dict, processed: eng.ProcessedRun, c
                 },
             )
         lock.check()
-        await _finish(res, run["_id"], processed, plan["claimed"], plan["taken"])
+        await _finish(res, run["_id"], processed, plan["claimed"], plan["taken"], plan.get("claimed_cells"))
         return {"skipped": False, "claimed": plan["claimed"], "taken": plan["taken"], "changes": plan["changes"]}
 
 
@@ -193,6 +202,7 @@ async def _plan(res: Resources, run: dict, processed: eng.ProcessedRun, credit: 
 
     outcomes: list[dict] = []
     claimed = taken = 0
+    claimed_cells: list[str] = []
     for cell in cells:
         doc = cell_docs.get(cell)
         current = doc["owner_id"] if doc else None
@@ -202,6 +212,7 @@ async def _plan(res: Resources, run: dict, processed: eng.ProcessedRun, credit: 
         changed = out.changed and out.new_owner is not None
         if out.new_owner == user_id:
             claimed += 1
+            claimed_cells.append(cell)
             if changed and current is not None:
                 taken += 1
         outcomes.append(
@@ -212,11 +223,30 @@ async def _plan(res: Resources, run: dict, processed: eng.ProcessedRun, credit: 
                 "lat": lat,
                 "lng": lng,
                 "owner": out.new_owner,
+                "prev_owner": current,  # the owner before this claim (battle events, Phase 1a 0.4)
                 "changed": changed,
                 "reveal_at": now + delay_ms,
                 "fields": change_fields(doc, out.new_owner, now, delay_ms) if changed else None,
             }
         )
+    # K-anonymity of the neighbourhood of every cell that flips from another user, fixed now (one batched call).
+    # The taker counts: after this claim they hold power around the cell, exactly as GET /cells will see it.
+    flips = [o for o in outcomes if o["changed"] and o["prev_owner"] not in (None, user_id)]
+    neigh = await _users_in_neighbourhoods(db, [o["cell"] for o in flips], s.privacy_ring) if flips else {}
+    expire_at = datetime.fromtimestamp(now / 1000, UTC) + timedelta(days=s.battle_retention_days)
+    for o in outcomes:
+        o["event"] = None
+        if o["cell"] in neigh:
+            o["event"] = {
+                "_id": f"{run['_id']}:{o['cell']}",
+                "run_id": run["_id"],
+                "cell": o["cell"],
+                "at": now,
+                "taker_id": user_id,
+                "victim_id": o["prev_owner"],
+                "k_ok": len(neigh[o["cell"]] | {user_id}) >= s.privacy_min_users,
+                "expire_at": expire_at,
+            }
     changes = [
         {"cell": o["cell"], "new_owner": o["owner"], "reveal_at": o["reveal_at"]} for o in outcomes if o["changed"]
     ]
@@ -231,9 +261,10 @@ async def _plan(res: Resources, run: dict, processed: eng.ProcessedRun, credit: 
         "applied": False,
         "claimed": claimed,
         "taken": taken,
+        "claimed_cells": claimed_cells,
         "outcomes": outcomes,
         "changes": changes,
-        "refs": sorted(refs - {user_id}),
+        "refs": sorted((refs | {o["prev_owner"] for o in outcomes if o["prev_owner"]}) - {user_id}),
         "created_at": now,
         "expire_at": expiry(res, s.fixes_retention_days),  # backstop: a plan normally dies with its run
     }
@@ -268,6 +299,12 @@ async def _apply(db: Any, user_id: str, o: dict) -> None:
                 await db.cells.insert_one({"_id": cell, "lat": o["lat"], "lng": o["lng"], **fields})
             except DuplicateKeyError:
                 pass
+        event = o.get("event")
+        if event:
+            # One durable row per flip from another user (the source of battles and rivals), keyed by run and
+            # cell and planned with the claim, so a redelivered run writes it exactly once.
+            doc = dict(event)
+            await db.battle_events.update_one({"_id": doc.pop("_id")}, {"$setOnInsert": doc}, upsert=True)
 
 
 # ------------------------------------------------------------------ account deletion
@@ -344,6 +381,9 @@ async def scrub_claim_plans(db: Any, user_id: str) -> None:
     async for plan in db.run_claims.find({"refs": user_id}):
         for o in plan.get("outcomes", []):
             o["owner"] = clear(o["owner"])
+            o["prev_owner"] = clear(o.get("prev_owner"))
+            if o.get("event") and o["event"]["victim_id"] == user_id:
+                o["event"] = None  # the victim is gone: no battle row names them
             for k in ("owner_id", "public_owner_id", "pending_owner_id"):
                 if o.get("fields"):
                     o["fields"][k] = clear(o["fields"][k])

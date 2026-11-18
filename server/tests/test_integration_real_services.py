@@ -92,3 +92,47 @@ def test_real_mongo_and_redis_end_to_end(real_db):
         assert real_db.runs.count_documents({}) == 0
         assert real_db.cell_power.count_documents({}) == 0
         assert not any(c.get("owner_id") for c in real_db.cells.find({}))
+
+
+def _real_client():
+    settings = Settings(
+        dev_auth=True,
+        jwt_secret="integration-secret-integration-secret-32b",
+        mongo_url=MONGO_URL,
+        redis_url=REDIS_URL,
+        publish_delay_seconds=0,
+        celery_task_always_eager=True,
+        run_rate_limit=1000,
+        leaderboard_cache_seconds=0,
+    )
+    return TestClient(create_app(settings))
+
+
+def _ttl(db, coll):
+    return [i for i in db[coll].list_indexes() if "expireAfterSeconds" in i]
+
+
+def test_real_mongo_phase1a_battle_events_and_indexes(real_db):
+    with _real_client() as client:
+        a = login(client, f"ia{uuid.uuid4().hex[:6]}")
+        b = login(client, f"ib{uuid.uuid4().hex[:6]}")
+        t0 = int(time.time() * 1000) - 7_200_000
+        upload(client, a, square_fixes(t0=t0, speed=3.0))
+        rid, _ = upload(client, b, square_fixes(t0=t0 + 3_600_000, speed=1.5))
+        run_b = client.get(f"/v1/runs/{rid}", headers=hdr(b)).json()
+        assert run_b["cells_taken_from_others"] > 0
+
+        # one battle row per flipped cell, keyed run:cell; TTL index on expire_at (0 s)
+        rows = list(real_db.battle_events.find({}))
+        assert len(rows) == run_b["cells_taken_from_others"]
+        assert all(r["_id"] == f"{r['run_id']}:{r['cell']}" and r["victim_id"] != r["taker_id"] for r in rows)
+        ttl = _ttl(real_db, "battle_events")
+        assert any(list(i["key"]) == ["expire_at"] and i["expireAfterSeconds"] == 0 for i in ttl), ttl
+        # claimed cells are stored on the accepted run (never returned by the API)
+        assert len(real_db.runs.find_one({"_id": rid})["claimed_cells"]) == run_b["cells_claimed"]
+        # the indexes of docs/PHASE1_SPEC.md 0.6 that serve the claim pipeline
+        keys = {tuple(i["key"].keys()) for i in real_db.battle_events.list_indexes()}
+        assert {("victim_id", "at"), ("taker_id", "at"), ("run_id",)} <= keys
+        run_keys = {tuple(i["key"].keys()) for i in real_db.runs.list_indexes()}
+        assert ("user_id", "status", "processed_at", "_id") in run_keys
+        assert ("user_id", "started_at", "_id") in run_keys

@@ -82,3 +82,10 @@ async def ensure_indexes(db: Any) -> None:
     await db.cells.create_index("pending_owner_id")
     await db.reports.create_index("expire_at", expireAfterSeconds=0)
     await db.reports.create_index("reporter_id")
+    # --- Phase 1a (docs/PHASE1_SPEC.md 0.6) ---
+    await db.runs.create_index([("user_id", 1), ("status", 1), ("processed_at", -1), ("_id", -1)])
+    await db.runs.create_index([("user_id", 1), ("started_at", -1), ("_id", -1)])
+    await db.battle_events.create_index([("victim_id", 1), ("at", -1)])
+    await db.battle_events.create_index([("taker_id", 1), ("at", -1)])
+    await db.battle_events.create_index("run_id")
+    await db.battle_events.create_index("expire_at", expireAfterSeconds=0)
