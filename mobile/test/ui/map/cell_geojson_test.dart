@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:looprun/core/app_theme_id.dart';
 import 'package:looprun/data/models/models.dart';
+import 'package:looprun/data/models/social_models.dart';
 import 'package:looprun/ui/map/cell_geojson.dart';
 
 const _hex = [
@@ -99,5 +100,22 @@ void main() {
       expect(fallback, startsWith('{'));
       expect(fallback, isNot(contains('http')));
     });
+  });
+
+  test('lost cells ("take it back") are closed [lng, lat] rings; cells without a boundary are left out', () {
+    final fc = lostCellsGeoJson(const [
+      LostCell(cell: 'a', boundary: _hex, lostAt: 5),
+      LostCell(cell: 'b', lat: 50.0, lng: 8.7),
+    ]);
+    final features = fc['features'] as List;
+    expect(features.length, 1);
+    final f = features.single as Map<String, dynamic>;
+    expect(f['properties'], {'id': 'a', 'kind': 'lost'});
+    final ring = ((f['geometry'] as Map)['coordinates'] as List).single as List;
+    expect(ring.length, 7);
+    expect(ring.first, [8.7, 50.001]);
+    expect(ring.last, ring.first);
+    expect(jsonDecode(jsonEncode(fc)), fc);
+    expect(lostCellsGeoJson(const []), emptyFeatureCollection);
   });
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../core/routes.dart';
 import '../../core/theme.dart';
 import '../../data/models/models.dart';
 import '../auth/auth_view_model.dart';
@@ -10,6 +12,7 @@ import '../core/theme_view_model.dart';
 import '../core/widgets.dart';
 import '../leaderboard/leaderboard_view_model.dart';
 import 'profile_view_model.dart';
+import 'rename_dialog.dart';
 
 /// Lane 3: YOU. Numbers, theme, home zones, rest days and the account.
 class ProfileScreen extends ConsumerWidget {
@@ -217,6 +220,48 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: 20),
+          Text('COMMUNITY', style: h2),
+          const SizedBox(height: 4),
+          Text('Other runners see your name. Runs only reach people who follow you.', style: p),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line))),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ListRow(
+                  key: const Key('edit_name_row'),
+                  chevron: true,
+                  label: 'Display name',
+                  trailing: name,
+                  onTap: () async {
+                    final changed = await showRenameDialog(context, currentName: user?.name ?? '');
+                    if (changed && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Name changed.')));
+                    }
+                  },
+                ),
+                _ListRow(key: const Key('history_row'),
+                  chevron: true, label: 'Run history', onTap: () => context.push(historyPath)),
+                _ListRow(key: const Key('followers_row'),
+                  chevron: true, label: 'Followers', onTap: () => context.push(followersPath)),
+                _ListRow(key: const Key('following_row'),
+                  chevron: true, label: 'Following', onTap: () => context.push(followingPath)),
+                _ListRow(key: const Key('find_runners_row'),
+                  chevron: true, label: 'Find runners', onTap: () => context.push(searchPath)),
+                if (user != null && user.id.isNotEmpty)
+                  _ListRow(
+                    key: const Key('my_public_profile_row'),
+                  chevron: true,
+                    label: 'How others see me',
+                    onTap: () => context.push(userProfilePath(user.id)),
+                  ),
+                _ListRow(key: const Key('blocked_row'),
+                  chevron: true, label: 'Blocked runners', onTap: () => context.push(blockedPath)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
           Text('THEME', style: h2),
           const SizedBox(height: 10),
           const _ThemePicker(),
@@ -345,9 +390,15 @@ class ProfileScreen extends ConsumerWidget {
 String _radius(double m) => m >= 1000 ? '${(m / 1000).toStringAsFixed(m % 1000 == 0 ? 0 : 1)} km radius' : '${m.round()} m radius';
 
 class _ListRow extends StatelessWidget {
-  const _ListRow({super.key, required this.label, required this.onTap});
+  const _ListRow({super.key, required this.label, required this.onTap, this.trailing, this.chevron = false});
   final String label;
   final VoidCallback? onTap;
+
+  /// Muted text at the right (the current value).
+  final String? trailing;
+
+  /// A small arrow: the row opens another screen.
+  final bool chevron;
 
   @override
   Widget build(BuildContext context) {
@@ -359,7 +410,19 @@ class _ListRow extends StatelessWidget {
         height: 52,
         radius: 0,
         alignment: Alignment.centerLeft,
-        child: Text(label, style: LrText.body(16, weight: FontWeight.w500, color: c.text)),
+        child: Row(
+          children: [
+            Expanded(child: Text(label, style: LrText.body(16, weight: FontWeight.w500, color: c.text))),
+            if (trailing != null)
+              Flexible(
+                child: Text(trailing!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: LrText.body(15, color: c.muted)),
+              ),
+            if (chevron) Icon(Icons.chevron_right, size: 20, color: c.muted),
+          ],
+        ),
       ),
     );
   }

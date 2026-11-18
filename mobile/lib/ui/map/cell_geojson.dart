@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../core/app_theme_id.dart';
 
 import '../../data/models/models.dart';
+import '../../data/models/social_models.dart';
 
 /// How a cell is drawn. The value is also the GeoJSON `kind` property the map layers filter on.
 enum CellKind {
@@ -69,6 +70,29 @@ Map<String, dynamic> cellPointsGeoJson(List<Cell> cells) {
       'geometry': <String, dynamic>{
         'type': 'Point',
         'coordinates': <double>[lng, lat],
+      },
+    });
+  }
+  return _collection(features);
+}
+
+/// The cells the caller lost ("take it back"): one polygon per cell with a boundary (GeoJSON wants
+/// [longitude, latitude] and a closed ring). Cells without a boundary are left out; the map still moves to
+/// them from the list.
+Map<String, dynamic> lostCellsGeoJson(List<LostCell> cells) {
+  final features = <Map<String, dynamic>>[];
+  for (final cell in cells) {
+    if (cell.boundary.length < 3) continue;
+    final ring = <List<double>>[
+      for (final p in cell.boundary) <double>[p.lng, p.lat],
+      <double>[cell.boundary.first.lng, cell.boundary.first.lat],
+    ];
+    features.add(<String, dynamic>{
+      'type': 'Feature',
+      'properties': <String, dynamic>{'id': cell.cell, 'kind': 'lost'},
+      'geometry': <String, dynamic>{
+        'type': 'Polygon',
+        'coordinates': <List<List<double>>>[ring],
       },
     });
   }

@@ -492,3 +492,9 @@ class DashedBorderPainter extends CustomPainter {
       old.color != color || old.radius != radius || old.strokeWidth != strokeWidth || old.circle != circle;
 }
 
+
+/// Shows a snackbar with [text] when it is not null (and the screen is still there).
+void tellUser(BuildContext context, String? text) {
+  if (text == null || !context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+}

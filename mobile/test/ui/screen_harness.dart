@@ -91,3 +91,11 @@ Future<void> pumpABit(WidgetTester tester, [int times = 5]) async {
     await tester.pump(const Duration(milliseconds: 20));
   }
 }
+
+/// A container with every fake of [h], signed in as the harness session (u1), for view model tests.
+Future<ProviderContainer> signedInContainer(Harness h) async {
+  final container = ProviderContainer(overrides: await h.overrides());
+  addTearDown(container.dispose);
+  await container.read(authRepositoryProvider).restore();
+  return container;
+}

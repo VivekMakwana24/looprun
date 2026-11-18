@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/routes.dart';
 import '../../core/theme.dart';
 import '../core/widgets.dart';
+import '../inbox/inbox_view_model.dart';
 import '../leaderboard/leaderboard_view_model.dart';
 import '../run/run_view_model.dart';
 import 'home_view_model.dart';
@@ -86,6 +89,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         onSelect: (i) {
           // Opening the board asks the server again (review B1); the other lanes keep their state.
           if (i == 1) ref.invalidate(weeklyLeaderboardProvider);
+          // Back on the map: ask whether something new arrived for the bell (there is no push in Phase 1a).
+          if (i == 0 && ref.exists(unreadCountProvider)) unawaited(ref.read(unreadCountProvider.notifier).refresh());
           if (i != widget.lane) widget.onSelectLane(i);
         },
       ),

@@ -8,7 +8,10 @@ import '../../core/theme.dart';
 import '../../data/models/models.dart';
 import '../../domain/recorder/run_recorder.dart';
 import '../core/report_dialog.dart';
+import '../battles/battles_view_model.dart';
+import '../battles/take_back_sheet.dart';
 import '../core/widgets.dart';
+import '../inbox/inbox_view_model.dart';
 import '../leaderboard/leaderboard_view_model.dart';
 import '../run/run_view_model.dart';
 import 'cell_map.dart';
@@ -136,6 +139,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           top: top,
           child: const IgnorePointer(child: _TopStats()),
         ),
+        // Outside the IgnorePointer above: the bell is tappable.
+        Positioned(top: top + 12, right: 12, child: const _InboxBell()),
         Positioned(
           left: 0,
           right: 0,
@@ -162,6 +167,49 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// The inbox bell with the number of unread notifications. Opens the inbox.
+class _InboxBell extends ConsumerWidget {
+  const _InboxBell();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.lr;
+    final unread = ref.watch(unreadCountProvider) ?? 0;
+    final badge = unread > 99 ? '99+' : '$unread';
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        LrIconButton(
+          key: const Key('inbox_bell'),
+          icon: unread > 0 ? Icons.notifications : Icons.notifications_none,
+          semanticLabel: unread == 0
+              ? 'Notifications'
+              : (unread == 1 ? 'Notifications, 1 unread' : 'Notifications, $unread unread'),
+          filled: true,
+          onTap: () => context.push(inboxPath),
+        ),
+        if (unread > 0)
+          Positioned(
+            top: -4,
+            right: -4,
+            child: IgnorePointer(
+              child: ExcludeSemantics(
+                child: Container(
+                  key: const Key('inbox_badge'),
+                  constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(10)),
+                  child: Text(badge, style: LrText.label(12, color: c.onAccent, tracking: 0.02, height: 1)),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -275,6 +323,7 @@ class _Sheet extends ConsumerWidget {
     final run = ref.watch(runViewModelProvider);
     final uploads = ref.watch(uploadSummaryProvider);
     final fading = map.fadingCount;
+    final lostCount = ref.watch(takeBackViewModelProvider.select((s) => s.cells.length));
     final active = run.isActive || run.status == RecorderStatus.stopping;
     final error = run.error;
 
@@ -309,6 +358,16 @@ class _Sheet extends ConsumerWidget {
                       ? 'No connection yet. Saved on this phone; we keep trying.'
                       : 'Saved on this phone. Sending now.'),
               onTap: uploads.runId == null ? null : () => context.push(runResultPath(uploads.runId!)),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (lostCount > 0) ...[
+            _NoticeRow(
+              key: const Key('take_back_notice'),
+              leading: Icon(Icons.hexagon_outlined, size: 22, color: c.rival),
+              title: lostCount == 1 ? '1 cell was taken from you' : '$lostCount cells were taken from you',
+              subtitle: 'Tap to take them back',
+              onTap: () => showTakeBackSheet(context),
             ),
             const SizedBox(height: 12),
           ],

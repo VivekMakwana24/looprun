@@ -5,12 +5,20 @@ import 'package:go_router/go_router.dart';
 import 'core/routes.dart';
 import 'core/theme.dart';
 import 'ui/auth/auth_view_model.dart';
+import 'data/models/social_models.dart';
 import 'ui/auth/sign_in_screen.dart';
+import 'ui/board/board_screen.dart';
 import 'ui/disclosure/disclosure_screen.dart';
 import 'ui/disclosure/disclosure_view_model.dart';
 import 'ui/home/home_screen.dart';
-import 'ui/leaderboard/leaderboard_screen.dart';
+import 'ui/feed/run_detail_screen.dart';
+import 'ui/history/history_screen.dart';
+import 'ui/inbox/inbox_screen.dart';
 import 'ui/map/map_screen.dart';
+import 'ui/people/people_view_models.dart' show PeopleKind;
+import 'ui/people/public_profile_screen.dart';
+import 'ui/people/user_list_screen.dart';
+import 'ui/people/user_search_screen.dart';
 import 'ui/profile/profile_screen.dart';
 import 'ui/run/run_screen.dart';
 import 'ui/run_result/run_result_screen.dart';
@@ -82,14 +90,72 @@ final routerProvider = Provider<GoRouter>((ref) {
                   parentNavigatorKey: rootKey,
                   builder: (context, state) => RunResultScreen(runId: state.pathParameters['id']!),
                 ),
+                GoRoute(
+                  path: 'inbox',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => const InboxScreen(),
+                ),
               ],
             ),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: boardPath, builder: (context, state) => const LeaderboardScreen()),
+            GoRoute(
+              path: boardPath,
+              builder: (context, state) => const BoardScreen(),
+              routes: [
+                GoRoute(
+                  path: 'search',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => const UserSearchScreen(),
+                ),
+                GoRoute(
+                  path: 'rivals',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => const UserListScreen(kind: PeopleKind.rivals),
+                ),
+                GoRoute(
+                  path: 'run/:id',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => RunDetailScreen(
+                    runId: state.pathParameters['id']!,
+                    card: state.extra is RunCard ? state.extra! as RunCard : null,
+                  ),
+                ),
+                GoRoute(
+                  path: 'user/:id',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => PublicProfileScreen(userId: state.pathParameters['id']!),
+                ),
+              ],
+            ),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: profilePath, builder: (context, state) => const ProfileScreen()),
+            GoRoute(
+              path: profilePath,
+              builder: (context, state) => const ProfileScreen(),
+              routes: [
+                GoRoute(
+                  path: 'history',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => const HistoryScreen(),
+                ),
+                GoRoute(
+                  path: 'followers',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => const UserListScreen(kind: PeopleKind.followers),
+                ),
+                GoRoute(
+                  path: 'following',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => const UserListScreen(kind: PeopleKind.following),
+                ),
+                GoRoute(
+                  path: 'blocked',
+                  parentNavigatorKey: rootKey,
+                  builder: (context, state) => const UserListScreen(kind: PeopleKind.blocked),
+                ),
+              ],
+            ),
           ]),
         ],
       ),

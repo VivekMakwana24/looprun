@@ -8,6 +8,8 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import '../../core/config.dart';
 import '../../core/theme.dart';
 import '../../data/models/models.dart';
+import '../../data/models/social_models.dart';
+import '../battles/battles_view_model.dart';
 import '../core/theme_view_model.dart';
 import 'cell_geojson.dart';
 import 'map_view_model.dart';
@@ -15,6 +17,7 @@ import 'map_view_model.dart';
 const String _cellSource = 'lr-cells';
 const String _pointSource = 'lr-cell-points';
 const String _meSource = 'lr-me';
+const String _lostSource = 'lr-lost';
 
 /// The map itself: MapLibre with the cells as hexagons (fill layers on a GeoJSON source), coloured from
 /// the active theme. Reads the cells from [mapViewModelProvider] and reports camera stops to it.
@@ -121,6 +124,7 @@ class _CellMapState extends ConsumerState<CellMap> {
       await c.addGeoJsonSource(_cellSource, emptyFeatureCollection);
       await c.addGeoJsonSource(_pointSource, emptyFeatureCollection);
       await c.addGeoJsonSource(_meSource, emptyFeatureCollection);
+      await c.addGeoJsonSource(_lostSource, emptyFeatureCollection);
 
       final accent = hexOf(colors.accent);
       final rival = hexOf(colors.rival);
@@ -193,6 +197,18 @@ class _CellMapState extends ConsumerState<CellMap> {
         filter: _kindIs(CellKind.mine),
       );
 
+      // Cells I lost this week ("take it back"): a faint fill and a dashed outline in my colour.
+      await c.addFillLayer(
+        _lostSource,
+        'lr-lost-fill',
+        FillLayerProperties(fillColor: accent, fillOpacity: 0.16),
+      );
+      await c.addLineLayer(
+        _lostSource,
+        'lr-lost-line',
+        LineLayerProperties(lineColor: accent, lineWidth: 2.5, lineDasharray: <double>[2, 1.5]),
+      );
+
       // Where the phone is: a dot with a ring.
       await c.addCircleLayer(
         _meSource,
@@ -216,7 +232,33 @@ class _CellMapState extends ConsumerState<CellMap> {
     }
     await _drawMe();
     await _draw(ref.read(mapViewModelProvider).cells);
+    await _drawLost(ref.read(takeBackViewModelProvider));
     await _onCameraIdle();
+  }
+
+  /// The lost cells, when "Show on map" is on; an empty source otherwise.
+  Future<void> _drawLost(TakeBackState s) async {
+    final c = _controller;
+    if (c == null || !_layersReady) return;
+    try {
+      await c.setGeoJsonSource(_lostSource, s.shown ? lostCellsGeoJson(s.cells) : emptyFeatureCollection);
+    } catch (_) {}
+  }
+
+  /// Moves the camera to a lost cell (a row of the sheet was tapped).
+  Future<void> _focusLost(LostCell? cell) async {
+    final c = _controller;
+    if (c == null || cell == null) return;
+    var lat = cell.lat;
+    var lng = cell.lng;
+    if ((lat == null || lng == null) && cell.boundary.isNotEmpty) {
+      lat = cell.boundary.first.lat;
+      lng = cell.boundary.first.lng;
+    }
+    if (lat == null || lng == null) return;
+    try {
+      await c.animateCamera(CameraUpdate.newLatLngZoom(LatLng(lat, lng), 16));
+    } catch (_) {}
   }
 
   static List<Object> _kindIs(CellKind kind) => <Object>[
@@ -309,6 +351,12 @@ class _CellMapState extends ConsumerState<CellMap> {
     }
     ref.listen<List<Cell>>(mapViewModelProvider.select((s) => s.cells), (previous, next) {
       _draw(next);
+    });
+    ref.listen<TakeBackState>(takeBackViewModelProvider, (previous, next) {
+      if (previous == null || previous.shown != next.shown || !identical(previous.cells, next.cells)) {
+        _drawLost(next);
+      }
+      if (previous == null || previous.focusSeq != next.focusSeq) _focusLost(next.focus);
     });
     return MapLibreMap(
       key: ValueKey<String>('cell_map_${themeId.name}${_useFallback ? '_offline' : ''}'),

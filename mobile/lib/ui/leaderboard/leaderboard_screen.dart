@@ -10,7 +10,10 @@ import 'leaderboard_view_model.dart';
 
 /// Lane 2: THE BOARD, cells held right now (that is what the server counts; see review follow-up 2).
 class LeaderboardScreen extends ConsumerWidget {
-  const LeaderboardScreen({super.key});
+  const LeaderboardScreen({super.key, this.embedded = false});
+
+  /// True inside the BOARD lane's hub, which draws the title and the tabs itself.
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -98,9 +101,7 @@ class LeaderboardScreen extends ConsumerWidget {
       );
     }
 
-    return SafeArea(
-      bottom: false,
-      child: RefreshIndicator(
+    final content = RefreshIndicator(
         color: c.accent,
         backgroundColor: c.surface,
         onRefresh: () async {
@@ -111,10 +112,16 @@ class LeaderboardScreen extends ConsumerWidget {
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(top: 22, bottom: 20),
+          padding: EdgeInsets.only(top: embedded ? 8 : 22, bottom: 20),
           child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (embedded)
+              _pad(Align(
+                alignment: Alignment.centerRight,
+                child: Text('Cells held now', key: const Key('board_scope'), style: LrText.body(13, color: c.muted)),
+              ))
+            else
             _pad(Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -140,8 +147,8 @@ class LeaderboardScreen extends ConsumerWidget {
           ],
         ),
         ),
-      ),
     );
+    return embedded ? content : SafeArea(bottom: false, child: content);
   }
 }
 
