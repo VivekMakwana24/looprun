@@ -131,6 +131,9 @@ async def follow(user_id: str, user: dict = Depends(auth.current_user), res: Res
         r = await res.db.follows.update_one(
             {"_id": fid}, {"$setOnInsert": {"follower_id": me, "followee_id": user_id, "at": now}}, upsert=True
         )
+        if not social.live_user(await res.db.users.find_one({"_id": user_id})):  # deleted while we inserted
+            await res.db.follows.delete_one({"_id": fid})
+            raise social.not_found()
         if r.upserted_id is not None:  # a re-follow after an unfollow finds the old notification and adds nothing
             await notify(
                 res, f"new_follower:{user_id}:{me}", user_id, "new_follower", me, now + s.publish_delay_seconds * 1000
@@ -317,6 +320,9 @@ async def give_kudos(run_id: UUID, user: dict = Depends(auth.current_user), res:
         {"$setOnInsert": {"run_id": rid, "run_owner_id": run["user_id"], "user_id": me, "at": now}},
         upsert=True,
     )
+    if not social.live_user(await res.db.users.find_one({"_id": run["user_id"]})):  # owner deleted meanwhile
+        await res.db.kudos.delete_one({"_id": f"{rid}:{me}"})
+        raise social.not_found()
     if r.upserted_id is not None:
         await notify(
             res, f"kudos:{rid}:{me}", run["user_id"], "kudos", me, now + res.settings.publish_delay_seconds * 1000,
@@ -408,6 +414,9 @@ async def add_comment(
         "created_at": now, "hidden": False,
     }  # fmt: skip
     await res.db.comments.insert_one(doc)
+    if not social.live_user(await res.db.users.find_one({"_id": run["user_id"]})):  # owner deleted meanwhile
+        await res.db.comments.delete_one({"_id": doc["_id"]})
+        raise social.not_found()
     if run["user_id"] != me:
         await notify(
             res, f"comment:{doc['_id']}", run["user_id"], "comment", me, now + s.publish_delay_seconds * 1000,

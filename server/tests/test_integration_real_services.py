@@ -292,3 +292,26 @@ def test_real_mongo_block_report_unique_index_and_moderation_log_ttl(real_db):
         assert real_db.moderation_log.count_documents({"admin": "ci"}) == 1
         ttl = _ttl(real_db, "moderation_log")
         assert any(list(i["key"]) == ["expire_at"] and i["expireAfterSeconds"] == 0 for i in ttl), ttl
+
+
+def test_real_mongo_delete_me_cleans_all_phase1a_data(real_db):
+    with _real_client() as client:
+        a = login(client, f"da{uuid.uuid4().hex[:6]}")
+        b = login(client, f"db{uuid.uuid4().hex[:6]}")
+        t0 = int(time.time() * 1000) - 7_200_000
+        upload(client, a, square_fixes(t0=t0, speed=3.0))
+        rid, _ = upload(client, b, square_fixes(t0=t0 + 3_600_000, speed=1.5))
+        assert client.put(f"/v1/users/{a['_uid']}/follow", headers=hdr(b)).status_code == 200
+        assert client.put(f"/v1/users/{b['_uid']}/follow", headers=hdr(a)).status_code == 200
+        assert client.post(
+            "/v1/reports", json={"kind": "user", "target_id": a["_uid"], "reason": "x"}, headers=hdr(b)
+        ).status_code == 202
+        assert real_db.battle_events.count_documents({"victim_id": a["_uid"]}) > 0
+        assert client.delete("/v1/me", headers=hdr(a)).status_code == 204
+        for coll in ("follows", "kudos", "comments", "notifications", "blocks"):
+            assert real_db[coll].count_documents({}) == 0, coll
+        # bob's takes stay as anonymous history; alice no longer appears in any battle row
+        assert real_db.battle_events.count_documents({"$or": [{"taker_id": a["_uid"]}, {"victim_id": a["_uid"]}]}) == 0
+        assert real_db.battle_events.count_documents({"taker_id": b["_uid"], "victim_id": None}) > 0
+        assert real_db.reports.count_documents({"target_id": a["_uid"]}) == 1  # reports about her stay
+        assert client.get(f"/v1/runs/{rid}", headers=hdr(b)).status_code == 200

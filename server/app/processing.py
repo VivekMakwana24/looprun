@@ -368,11 +368,56 @@ async def delete_account(res: Resources, user_id: str) -> None:
     await scrub_claim_plans(db, user_id)  # plans of OTHER users' in-flight runs may still name this user
     await db.runs.delete_many({"user_id": user_id})
     await db.reports.delete_many({"reporter_id": user_id})
+    await delete_social_data(db, user_id)
     await db.users.delete_one({"_id": user_id})
+    # Repeat-safe sweep: a follow, kudos or comment that raced with the steps above (it passed its own visibility
+    # check just before the account was marked `deleting`) is removed now that the user document is gone.
+    await delete_social_data(db, user_id)
     await purge_redis(res.redis, user_id)
     await publish_changes(res.redis, changes)
     await publish_user_deleted(res.redis, user_id)
     log.info("account_deleted", extra={"cells_reassigned": len(changes)})
+
+
+async def _del_follows(db: Any, u: str) -> None:
+    await db.follows.delete_many({"$or": [{"follower_id": u}, {"followee_id": u}]})
+
+
+async def _del_kudos(db: Any, u: str) -> None:
+    await db.kudos.delete_many({"$or": [{"user_id": u}, {"run_owner_id": u}]})
+
+
+async def _del_comments(db: Any, u: str) -> None:
+    await db.comments.delete_many({"$or": [{"author_id": u}, {"run_owner_id": u}]})
+
+
+async def _del_notifications(db: Any, u: str) -> None:
+    await db.notifications.delete_many({"$or": [{"user_id": u}, {"actor_id": u}]})
+
+
+async def _del_battle_events(db: Any, u: str) -> None:
+    await db.battle_events.delete_many({"taker_id": u})  # their takes leave other people's history and take-back
+    await db.battle_events.update_many({"victim_id": u}, {"$set": {"victim_id": None}})  # the taker's counts survive
+
+
+async def _del_blocks(db: Any, u: str) -> None:
+    await db.blocks.delete_many({"$or": [{"blocker_id": u}, {"blocked_id": u}]})
+
+
+# Phase 1a data of a deleted account (docs/PHASE1_SPEC.md 9). Every step is delete_many/update_many: safe to repeat.
+SOCIAL_STEPS = {
+    "follows": _del_follows,
+    "kudos": _del_kudos,
+    "comments": _del_comments,
+    "notifications": _del_notifications,
+    "battle_events": _del_battle_events,
+    "blocks": _del_blocks,
+}
+
+
+async def delete_social_data(db: Any, user_id: str) -> None:
+    for step in SOCIAL_STEPS.values():
+        await step(db, user_id)
 
 
 async def scrub_claim_plans(db: Any, user_id: str) -> None:
