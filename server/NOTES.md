@@ -74,6 +74,16 @@ Tests: `LOOPRUN_TEST_ENGINE=fake|real` (default: real if installed, else tests/f
 - `app.openapi()` lists the same status codes per route as docs/CONTRACT.openapi.yaml (`responses=` on the routes;
   a test compares them).
 
+## Phase 1a (social + battles)
+- Code: `social.py` (predicates, cursors, rate limit helper), `social_api.py` (all new routes), `cards.py` (feed and history cards in a constant number of queries), `notifications.py`, `moderation.py` (CLI), `profanity.py`, `backfill_social.py`.
+- Claim pipeline: each claimed cell writes a `battle_events` row (`_id` `run:cell`, `$setOnInsert`, inside the lock) with `k_ok` fixed at claim time; accepted runs store `claimed_cells`. `cells_taken` notifications are written before `_finish`, so a redelivery repeats them safely.
+- Visibility: one 404 body for everything not visible; blocked and deleting users are filtered at read time. Names shown only if `name_ok` (k_ok, not the user's home zone, live, not hidden, not blocked). Feed events respect `publish_delay_seconds`.
+- Collections: `battle_events`, `follows`, `kudos`, `comments`, `notifications`, `blocks`, `reports`, `moderation_log`. TTL: battle_events (`battle_retention_days`), notifications, moderation_log. `reports` has a unique partial index (user, comment, run_card).
+- Settings: `social_*_rate`, `social_max_*`, `feed_window_days`, `battle_retention_days`, `notification_retention_days`, `moderation_log_retention_days`, `filter_comments`, `profanity_list_path`, `admin_enabled`.
+- Deletion: `delete_social_data` (`SOCIAL_STEPS`) runs before and after removing the user; every step is repeat-safe. Follow, kudos and comment re-check the target after inserting.
+- Existing databases: run `python -m app.backfill_social` once (name_lower, name_hidden, indexes); it is idempotent.
+- Moderation CLI: see docs/RUNBOOK.md section 4c. Deviations are in the spec change log.
+
 ## Questions / known limits
 - `cells_claimed` = cells of the run the user owns after the run (includes ones already theirs); `cells_taken_from_others` =
   subset previously owned by someone else. Contract does not define it.

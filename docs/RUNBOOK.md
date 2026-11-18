@@ -77,6 +77,19 @@ Containers use `restart: unless-stopped`, so they come back after a reboot as lo
 
 `deploy/Caddyfile` limits request bodies to 8 MiB (matching the server's own cap) and writes access logs through a filter that replaces the `token` query parameter and the `Authorization` header with `REDACTED`, so WebSocket `?token=` values and bearer tokens do not reach disk. Validated with `caddy validate` and a local request test (Caddy 2.8.4); not tested behind the real proxy chain. The preferred WebSocket auth is the first message `{"type":"auth","token":...}`, which never appears in a URL.
 
+## 4c. Moderation (Phase 1a)
+Reports (`POST /reports`: user, comment, run_card) are handled by hand. Target: answer within 24 hours.
+```
+docker compose exec api python -m app.moderation reports            # open reports
+docker compose exec api python -m app.moderation hide-comment <id>  # also: hide-name <user>, hide-run <run>
+docker compose exec api python -m app.moderation unhide-comment <id>  # also unhide-name, unhide-run
+docker compose exec api python -m app.moderation dismiss <report_id>
+```
+`hide-*` resolve the open reports on that target; `dismiss <report_id>` closes one report without action (`reports --state all --kind comment --limit N` filters the list). Every action is written to
+`moderation_log` (OS user, action, target, report ids; deleted after `LOOPRUN_MODERATION_LOG_RETENTION_DAYS`).
+Set `LOOPRUN_ADMIN_ENABLED=false` to make the CLI refuse (exit 2). After upgrading an existing database run once:
+`docker compose exec api python -m app.backfill_social`.
+
 ## 5. Backups
 
 `deploy/backup.sh` runs `mongodump --archive --gzip` inside the mongo container and writes `/var/backups/looprun/mongo-<UTC timestamp>.archive.gz`, deleting archives older than 14 days (`KEEP_DAYS`). The setup script installs it as `/etc/cron.d/looprun-backup` (daily 03:15 server time, log in `/var/log/looprun-backup.log`).
