@@ -167,3 +167,23 @@ def test_real_mongo_follow_search_notifications(real_db):
         ttl = _ttl(real_db, "notifications")
         assert any(list(i["key"]) == ["expire_at"] and i["expireAfterSeconds"] == 0 for i in ttl), ttl
         assert client.put(f"/v1/users/{a['_uid']}/follow", headers=hdr(a)).json()["detail"]["code"] == "self"
+
+
+def test_real_mongo_feed_history_and_battle_cards(real_db):
+    with _real_client() as client:
+        a = login(client, f"ea{uuid.uuid4().hex[:6]}")
+        b = login(client, f"eb{uuid.uuid4().hex[:6]}")
+        t0 = int(time.time() * 1000) - 7_200_000
+        upload(client, a, square_fixes(t0=t0, speed=3.0))
+        rid, _ = upload(client, b, square_fixes(t0=t0 + 3_600_000, speed=1.5))
+        assert client.put(f"/v1/users/{a['_uid']}/follow", headers=hdr(b)).status_code == 200
+        own = client.get("/v1/runs", headers=hdr(b)).json()["items"]
+        assert [c["id"] for c in own] == [rid] and own[0]["cells_claimed"] > 0 and own[0]["status"] == "accepted"
+        # the real publish delay (30 min) has not passed for the card of a run that finished just now; own runs show
+        feed = client.get("/v1/feed", headers=hdr(b)).json()["items"]
+        assert rid in [c["id"] for c in feed]
+        # alice's first run is two hours old: bob follows her, so it is in his feed after the delay
+        a_run = real_db.runs.find_one({"user_id": a["_uid"]})
+        assert a_run["_id"] in [c["id"] for c in feed] and "claimed_cells" in a_run
+        keys = {tuple(i["key"].keys()) for i in real_db.runs.list_indexes()}
+        assert ("user_id", "status", "processed_at", "_id") in keys

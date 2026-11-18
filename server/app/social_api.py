@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 
 from . import auth, social
 from .api import errs
+from .cards import build_cards
 from .leaderboard import cached_public_counts, weekly_rows
-from .models import FollowState, Profile, UserList, UserListItem, UserPage
+from .models import FollowState, Profile, RunPage, UserList, UserListItem, UserPage
 from .notifications import notify
 from .resources import Resources
 
@@ -192,3 +195,73 @@ async def my_rivals(user: dict = Depends(social.reader), res: Resources = Depend
     mine, theirs = await social.follow_flags(res, me, order)
     return UserList(users=[UserListItem(**social.list_item(users[o], me, mine, theirs)) for o in order])
 
+
+
+# ---------------------------------------------------------------- feed and run history
+def _before(c: list | None, field: str) -> dict:
+    """Mongo condition for 'sorts after the cursor' on (field desc, _id desc)."""
+    if not c:
+        return {}
+    return {"$or": [{field: {"$lt": c[0]}}, {field: c[0], "_id": {"$lt": c[1]}}]}
+
+
+@router.get("/feed", response_model=RunPage, responses=errs(401, 403, 422, 429))
+async def feed(
+    limit: int | None = None,
+    cursor: str | None = None,
+    user: dict = Depends(social.reader),
+    res: Resources = Depends(auth.get_res),
+) -> RunPage:
+    """Own accepted runs at once, followees' after the publish delay; newest `processed_at` first."""
+    s, me, now = res.settings, user["_id"], res.clock()
+    n = social.parse_limit(limit)
+    c = social.decode_cursor(cursor, 2)
+    followees = [f["followee_id"] async for f in res.db.follows.find({"follower_id": me}, {"followee_id": 1})]
+    live = await social.live_users(res, followees)
+    gone = await social.blocked_with(res, me, live)
+    ids = sorted(set(live) - gone)[: s.social_max_following]
+    published = {
+        "user_id": {"$in": ids},
+        "processed_at": {"$lte": now - s.publish_delay_seconds * 1000},
+        "claimed_cells": {"$exists": True},  # runs from before phase 1a are never shown to others
+    }
+    parts: list[dict] = [{"$or": [{"user_id": me}, published]}]
+    if c:
+        parts.append(_before(c, "processed_at"))
+    q = {
+        "status": "accepted",
+        "hidden": {"$ne": True},
+        "processed_at": {"$gte": now - s.feed_window_days * DAY_MS},
+        "$and": parts,
+    }
+    rows = [r async for r in res.db.runs.find(q).sort([("processed_at", -1), ("_id", -1)]).limit(n + 1)]
+    more = len(rows) > n
+    rows = rows[:n]
+    return RunPage(
+        items=await build_cards(res, me, rows),
+        next_cursor=social.encode_cursor(rows[-1]["processed_at"], rows[-1]["_id"]) if more else None,
+    )
+
+
+@router.get("/runs", response_model=RunPage, responses=errs(401, 403, 422, 429))
+async def run_history(
+    limit: int | None = None,
+    cursor: str | None = None,
+    status: Literal["processing", "accepted", "pending_review", "rejected"] | None = None,
+    user: dict = Depends(social.reader),
+    res: Resources = Depends(auth.get_res),
+) -> RunPage:
+    """The caller's own runs of every status, newest `started_at` first, with their own full numbers."""
+    me = user["_id"]
+    n = social.parse_limit(limit)
+    c = social.decode_cursor(cursor, 2)
+    q: dict = {"user_id": me, **_before(c, "started_at")}
+    if status:
+        q["status"] = status
+    rows = [r async for r in res.db.runs.find(q).sort([("started_at", -1), ("_id", -1)]).limit(n + 1)]
+    more = len(rows) > n
+    rows = rows[:n]
+    return RunPage(
+        items=await build_cards(res, me, rows),
+        next_cursor=social.encode_cursor(rows[-1]["started_at"], rows[-1]["_id"]) if more else None,
+    )

@@ -185,3 +185,33 @@ class UserList(BaseModel):
 class FollowState(BaseModel):
     is_following: bool
     followers_count: int
+
+
+class TakenFrom(BaseModel):
+    user: UserRef
+    cells: int
+
+
+class RunCard(BaseModel):
+    """What a follower (or the owner) may see of an accepted run. Never GPS points, geometry, start or end."""
+
+    id: str
+    user: UserRef
+    started_at: int
+    distance_m: float | None = None
+    moving_seconds: int | None = None
+    pace_s_per_km: float | None = None
+    cells_claimed: int = 0
+    cells_taken: int = 0
+    taken_from: list[TakenFrom] = []
+    taken_from_hidden: int = 0
+    loop_count: int = 0
+    kudos_count: int = 0
+    kudos_by_me: bool = False
+    comment_count: int = 0
+    status: Literal["processing", "accepted", "pending_review", "rejected"]
+
+
+class RunPage(BaseModel):
+    items: list[RunCard]
+    next_cursor: str | None = None
