@@ -75,7 +75,7 @@ def test_rivalry_totals_sorting_unattributed_and_window(client):
     r = get(client, a, "/battles/rivalry").json()
     assert r["days"] == 30 and r["unattributed"] == {"taken": 1, "lost": 1}
     rows = {x["user"]["name"]: x for x in r["rivals"]}
-    assert [x["user"]["name"] for x in r["rivals"]] == ["dora", "bob", "eve"]  # taken+lost: dora 3, bob 3 (more recent), eve 1
+    assert [x["user"]["name"] for x in r["rivals"]] == ["dora", "bob", "eve"]  # 3, 3 (older), 1
     assert (rows["bob"]["taken"], rows["bob"]["lost"], rows["bob"]["net"]) == (2, 1, 1)
     assert (rows["dora"]["taken"], rows["dora"]["lost"], rows["dora"]["net"]) == (0, 3, -3)
     assert rows["bob"]["last_battle_at"] == T0 - 3 * DAY and rows["dora"]["last_battle_at"] == T0 - DAY
