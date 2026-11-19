@@ -315,6 +315,7 @@ class DioApiService implements ApiService {
 
   @override
   Future<void> markRead({List<String>? ids, bool all = false}) => _guard(() async {
+        if (!all && (ids == null || ids.isEmpty)) return; // the server answers 422 to an empty list
         await _dio.post('/notifications/read', data: all ? {'all': true} : {'ids': ids ?? const <String>[]});
       });
 

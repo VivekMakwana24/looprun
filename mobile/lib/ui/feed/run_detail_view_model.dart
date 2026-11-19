@@ -104,6 +104,19 @@ class RunDetailViewModel extends AutoDisposeFamilyNotifier<RunDetailState, RunDe
     } catch (e) {
       if (!_alive || gen != _generation) return;
       state = state.copyWith(loading: false, error: errorText(e), offline: isOffline(e));
+      return;
+    }
+    if (state.card == null) await _findCard(gen);
+  }
+
+  /// Opened from a notification: the numbers come from the caller's history (no error is shown when not found).
+  Future<void> _findCard(int gen) async {
+    try {
+      final card = await ref.read(feedRepositoryProvider).ownCard(_runId);
+      if (!_alive || gen != _generation || card == null) return;
+      state = state.copyWith(card: card);
+    } catch (_) {
+      // The comments are the point of the screen; the header stays out.
     }
   }
 

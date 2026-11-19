@@ -32,7 +32,7 @@ Future<bool> runCardMenuAction(
   final ok = await askConfirm(
     context,
     title: 'Block ${card.user.name}?',
-    text: 'You will not see each other in the feed, comments or search. You stop following each other.',
+    text: blockExplanation,
     confirmLabel: 'Block',
     confirmKey: const Key('confirm_block'),
     danger: true,

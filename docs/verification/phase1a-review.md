@@ -89,3 +89,11 @@ Scope: server b0addb8..d74eb57, mobile up to 7efbf8f, checked against `docs/PHAS
 ## Verdict
 
 Not ready to release. B1 and B2 are fixable in a small change and each needs one test. B3 is a documentation task. The rest of phase 1a matches the spec and contract: the privacy predicates are centralised and used everywhere, the pipeline changes are idempotent inside the lock, deletion is complete, and the app is wired correctly. After B1 to B3 are fixed, I expect to approve it; a re-check of the two notification tests is enough.
+
+## Fixes: mobile (follow-ups 2, 8, 9, 10)
+
+- **Follow-up 9 (block text):** one shared `blockExplanation` is used by all three block dialogs (run card, comment, profile). It says a blocked runner still appears as an owner on the map and on the leaderboard, and that they can still be reported from BLOCKED in YOU.
+- **Follow-up 2 (report after block):** each row of the BLOCKED list has a Report button (`person_report_<id>`, 48 dp) that sends `kind: user`. It needs the server change in follow-up 2 to answer 202 for a blocked pair; until then the app shows the server's sentence.
+- **Follow-up 8 (run from a notification):** run detail looks the run up in the first 3 history pages (`FeedRepository.ownCard`) and shows the kudos button and numbers when found; no error when not found. It only helps for own runs, which is what kudos and comment notifications are about. A single-card route in the contract would still be cleaner.
+- **Follow-up 10:** `ApiService.markRead` sends nothing for an empty id list.
+- **Tests added:** history screen (statuses, empty, offline and retry, load more, open run), block text, report from BLOCKED, run detail from a notification, `ownCard`. The BOARD hub already had widget tests (three parts, lazy loading, 48 dp tabs) from the first push.

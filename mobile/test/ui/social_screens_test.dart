@@ -12,6 +12,7 @@ import 'package:looprun/ui/core/theme_view_model.dart';
 import 'package:looprun/ui/feed/feed_screen.dart';
 import 'package:looprun/ui/feed/run_card_view.dart';
 import 'package:looprun/ui/feed/run_detail_screen.dart';
+import 'package:looprun/ui/history/history_screen.dart';
 import 'package:looprun/ui/inbox/inbox_screen.dart';
 import 'package:looprun/ui/inbox/inbox_view_model.dart';
 import 'package:looprun/ui/map/map_screen.dart';
@@ -618,6 +619,98 @@ void main() {
       await settleUi(tester);
       expect(find.byKey(const Key('comments_error')), findsOneWidget);
       expect(find.text('That is not available any more.'), findsOneWidget);
+    });
+  });
+
+  group('history screen', () {
+    testWidgets('own runs with their status; Processing, In review and Not counted are said', (tester) async {
+      final h = Harness();
+      h.api.historyPages = [
+        page([
+          card('r1', owner: 'u1', ownerName: 'Vivek'),
+          card('r2', owner: 'u1', ownerName: 'Vivek', status: 'processing'),
+          card('r3', owner: 'u1', ownerName: 'Vivek', status: 'pending_review'),
+          card('r4', owner: 'u1', ownerName: 'Vivek', status: 'rejected'),
+        ])
+      ];
+      await pumpScreen(tester, h, const HistoryScreen());
+      await settleUi(tester);
+      for (final id in ['r1', 'r2', 'r3', 'r4']) {
+        expect(find.byKey(Key('history_card_$id')), findsOneWidget);
+      }
+      expect(find.text('Processing'), findsOneWidget);
+      expect(find.text('In review'), findsOneWidget);
+      expect(find.text('Not counted'), findsOneWidget);
+    });
+
+    testWidgets('empty, offline with a working retry, and more pages', (tester) async {
+      final h = Harness();
+      await pumpScreen(tester, h, const HistoryScreen());
+      await settleUi(tester);
+      expect(find.text('No runs yet'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+
+      final h2 = Harness();
+      h2.api.socialErrors['runHistory'] = const ApiException(null, 'offline');
+      await pumpScreen(tester, h2, const HistoryScreen());
+      await settleUi(tester);
+      expect(find.text("Can't reach the server"), findsOneWidget);
+      h2.api.socialErrors.clear();
+      h2.api.historyPages = [page([card('r1', owner: 'u1')], 'p1'), page([card('r2', owner: 'u1')])];
+      await tester.tap(find.text('Try again'));
+      await settleUi(tester);
+      expect(find.byKey(const Key('history_card_r1')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('list_load_more')));
+      await settleUi(tester);
+      expect(find.byKey(const Key('history_card_r2')), findsOneWidget);
+    });
+
+    testWidgets('a card opens its run page', (tester) async {
+      final h = Harness();
+      h.api.historyPages = [page([card('r1', owner: 'u1')])];
+      await pumpRouted(tester, h, const HistoryScreen());
+      await settleUi(tester);
+      await tester.tap(find.byKey(const Key('history_card_r1')));
+      await tester.pumpAndSettle();
+      expect(find.text('run page r1'), findsOneWidget);
+    });
+  });
+
+  group('after a block', () {
+    testWidgets('the block dialog says the runner stays on the map and the leaderboard', (tester) async {
+      final h = Harness();
+      h.api.commentPages = [page([comment('c1', author: 'u2', authorName: 'Bob')])];
+      await pumpScreen(tester, h, RunDetailScreen(runId: 'r1', card: card('r1')));
+      await settleUi(tester);
+      await tester.tap(find.byKey(const Key('comment_menu_c1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('comment_block')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('still appears as an owner on the map and on the leaderboard'), findsOneWidget);
+    });
+
+    testWidgets('a blocked runner can still be reported from the blocked list', (tester) async {
+      final h = Harness();
+      h.api.blockPages = [page([user('u9', 'Zed')])];
+      await pumpScreen(tester, h, const UserListScreen(kind: PeopleKind.blocked));
+      await settleUi(tester);
+      expect(tester.getSize(find.byKey(const Key('person_report_u9'))).height, greaterThanOrEqualTo(48));
+      await tester.tap(find.byKey(const Key('person_report_u9')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('report_reason_field')), 'Abuse');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('report_send_button')));
+      await settleUi(tester);
+      expect(h.api.reports.single, {'kind': 'user', 'target_id': 'u9', 'reason': 'Abuse'});
+    });
+
+    testWidgets('a run opened from a notification finds its numbers in the history', (tester) async {
+      final h = Harness();
+      h.api.historyPages = [page([card('r1', owner: 'u1', ownerName: 'Vivek', kudos: 4)])];
+      await pumpScreen(tester, h, const RunDetailScreen(runId: 'r1'));
+      await settleUi(tester);
+      expect(find.byKey(const Key('kudos_button')), findsOneWidget);
     });
   });
 }

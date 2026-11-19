@@ -7,6 +7,7 @@ import '../../data/models/social_models.dart';
 import '../core/initials_avatar.dart';
 import '../core/lr_page.dart';
 import '../core/report_dialog.dart';
+import '../core/social_actions_view_model.dart';
 import '../core/widgets.dart';
 import 'public_profile_view_model.dart';
 
@@ -26,8 +27,7 @@ class PublicProfileScreen extends ConsumerWidget {
     final ok = await askConfirm(
       context,
       title: 'Block ${p.name}?',
-      text: 'You will not see each other in the feed, comments or search. You stop following each other. '
-          'They are not told. Their cells still show on the map.',
+      text: '$blockExplanation They are not told.',
       confirmLabel: 'Block',
       confirmKey: const Key('confirm_block'),
       danger: true,

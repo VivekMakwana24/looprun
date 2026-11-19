@@ -8,6 +8,8 @@ import '../../data/models/social_models.dart';
 import '../core/initials_avatar.dart';
 import '../core/lr_page.dart';
 import '../core/paged_list_view.dart';
+import '../core/report_dialog.dart';
+import '../core/social_actions_view_model.dart';
 import '../core/widgets.dart';
 import 'people_view_models.dart';
 
@@ -19,6 +21,7 @@ class PersonRow extends StatelessWidget {
     required this.actionLabel,
     required this.onAction,
     this.onOpen,
+    this.onReport,
     this.actionFilled = false,
   });
 
@@ -26,6 +29,9 @@ class PersonRow extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final VoidCallback? onOpen;
+
+  /// Offers "Report" next to the button (the blocked list: reporting stays possible after a block).
+  final VoidCallback? onReport;
 
   /// The button is the call to action (Follow), not a status (Following).
   final bool actionFilled;
@@ -73,6 +79,13 @@ class PersonRow extends StatelessWidget {
               ),
             ),
           ),
+          if (onReport != null)
+            LrIconButton(
+              key: Key('person_report_${person.id}'),
+              icon: Icons.flag_outlined,
+              semanticLabel: 'Report ${person.name}',
+              onTap: onReport,
+            ),
           if (actionLabel != null)
             Padding(
               padding: const EdgeInsets.only(right: 8),
@@ -162,6 +175,14 @@ class UserListScreen extends ConsumerWidget {
           onOpen: blocked ? null : () => context.push(userProfilePath(person.id)),
           actionLabel: blocked ? 'UNBLOCK' : (person.isFollowing ? 'FOLLOWING' : 'FOLLOW'),
           actionFilled: !blocked && !person.isFollowing,
+          onReport: blocked
+              ? () async {
+                  final reason = await askReportReason(context, title: 'Report this runner');
+                  if (reason == null || !context.mounted) return;
+                  final out = await ref.read(socialActionsProvider.notifier).report(ReportKind.user, person.id, reason);
+                  if (context.mounted) tellUser(context, out.error ?? 'Report sent. Thank you.');
+                }
+              : null,
           onAction: () async {
             final error = blocked ? await vm.unblock(person) : await vm.toggleFollow(person);
             if (context.mounted) tellUser(context, error);

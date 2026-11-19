@@ -18,6 +18,11 @@ class Outcome<T> {
   bool get ok => error == null;
 }
 
+/// What the block dialogs say (spec 10): hidden in the feed, comments and search, but still on the map and board.
+const String blockExplanation = 'You will not see each other in the feed, comments or search. You stop following each other. '
+    'A blocked runner still appears as an owner on the map and on the leaderboard. '
+    'You can still report them from BLOCKED in YOU.';
+
 /// Follow, block, unblock and report, shared by every screen that offers them (profile, comment, run card,
 /// lists). Stateless: the screens keep their own state.
 class SocialActions extends Notifier<void> {

@@ -115,6 +115,18 @@ void main() {
       expect(FeedRepository.checkComment('a\nb\tc'), 'a b c');
     });
 
+    test('ownCard looks through the history pages, and gives up after three', () async {
+      api.historyPages = [
+        page([card('a')], 'p1'),
+        page([card('b')], 'p2'),
+        page([card('c')], 'p3'),
+        page([card('d')]),
+      ];
+      expect((await repo.ownCard('b'))?.id, 'b');
+      expect(await repo.ownCard('d'), isNull, reason: 'the fourth page is not asked for');
+      expect(await repo.ownCard('zz'), isNull);
+    });
+
     test('delete goes to the comment id', () async {
       await repo.deleteComment('r1', 'c9');
       expect(api.deletedComments, ['c9']);

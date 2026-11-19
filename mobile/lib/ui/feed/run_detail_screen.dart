@@ -81,7 +81,7 @@ class _RunDetailScreenState extends ConsumerState<RunDetailScreen> {
           final ok = await askConfirm(
             context,
             title: 'Block ${comment.user.name}?',
-            text: 'You will not see each other in the feed, comments or search.',
+            text: blockExplanation,
             confirmLabel: 'Block',
             confirmKey: const Key('confirm_block'),
             danger: true,
