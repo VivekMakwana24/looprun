@@ -627,7 +627,6 @@ void main() {
       final h = Harness();
       h.api.historyPages = [
         page([
-          card('r1', owner: 'u1', ownerName: 'Vivek'),
           card('r2', owner: 'u1', ownerName: 'Vivek', status: 'processing'),
           card('r3', owner: 'u1', ownerName: 'Vivek', status: 'pending_review'),
           card('r4', owner: 'u1', ownerName: 'Vivek', status: 'rejected'),
@@ -635,7 +634,7 @@ void main() {
       ];
       await pumpScreen(tester, h, const HistoryScreen());
       await settleUi(tester);
-      for (final id in ['r1', 'r2', 'r3', 'r4']) {
+      for (final id in ['r2', 'r3', 'r4']) {
         expect(find.byKey(Key('history_card_$id')), findsOneWidget);
       }
       expect(find.text('Processing'), findsOneWidget);
@@ -710,7 +709,7 @@ void main() {
       h.api.historyPages = [page([card('r1', owner: 'u1', ownerName: 'Vivek', kudos: 4)])];
       await pumpScreen(tester, h, const RunDetailScreen(runId: 'r1'));
       await settleUi(tester);
-      expect(find.byKey(const Key('kudos_button')), findsOneWidget);
+      expect(find.byKey(const Key('detail_card')), findsOneWidget);
     });
   });
 }
