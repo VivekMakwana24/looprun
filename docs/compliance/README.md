@@ -22,6 +22,7 @@ Everything here is a draft written from the code as of 2026-11-03 (verifier repo
 | `[HOSTING_REGION]` | AWS region of the Lightsail instance (for example Frankfurt, eu-central-1) | privacy-policy |
 | `[MAP_TILE_PROVIDER]` | Map tile / style provider (name and host). App default: `OpenFreeMap (tiles.openfreemap.org)`; override with `MAP_TILE_PROVIDER` together with `MAP_STYLE_URL` | privacy-policy, location-disclosure, data-safety-answers |
 | `[PRIVACY_POLICY_URL]` | Public URL of the hosted privacy policy | tester-guide, location-disclosure, Play Console |
+| `[TERMS_URL]` | **Operator to-do.** Public URL of the Terms with the community rules (no harassment, hate, sexual content, personal data in names or comments); the UGC declaration points to it | privacy-policy, data-safety-answers |
 | `[ACCOUNT_DELETION_URL]` | **Operator to-do.** Public web page where a user can start account deletion without the app (Play rule), naming Looprun / the developer. Needs a Sign in with Google step because the server stores no email; the policy section alone is not enough | privacy-policy, data-safety-answers, Play Console |
 | `[OPT_IN_LINK]` | Closed-test opt-in URL from Play Console | tester-guide |
 | `[TEST_START]`, `[TEST_END]` | First and last day of the 14-day test | tester-guide |

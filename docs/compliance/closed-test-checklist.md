@@ -28,6 +28,8 @@ Let D be the date the 12th tester is opted in (all 12 must stay in). The earlies
 
 ## Run the test
 
+- [ ] The build has the social features: the privacy policy, the Data safety answers (with the UGC declarations) and `tester-guide.md` match them, and the testers run the social pass (`tester-guide.md` section 2, item 11): rename, search and follow, feed after 30 minutes, kudos and comments, inbox, battles and take-back, report, block and unblock.
+
 - [ ] Testing > Closed testing > create a track (or use the default), add a tester list (email list or Google Group), upload the AAB, roll out.
 - [ ] Copy the opt-in link into `tester-guide.md` and send it.
 - [ ] Track opt-in count daily; keep a spreadsheet: name, Google email, opted in on, still opted in.

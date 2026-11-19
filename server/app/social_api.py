@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import unicodedata
 import uuid
-from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -48,6 +47,7 @@ DAY_MS = 86_400_000
 RIVAL_DAYS = 30
 MAX_RIVALS = 50
 SEARCH_LIMIT = 20
+RUN_STATUSES = ("processing", "accepted", "pending_review", "rejected")
 
 
 # ---------------------------------------------------------------- search (before /users/{id})
@@ -57,7 +57,7 @@ async def search_users(
 ) -> UserList:
     me = user["_id"]
     await social.limited(res, "search", me, res.settings.social_search_rate, 60)
-    key = " ".join(q.split()).lower()
+    key = " ".join(unicodedata.normalize("NFC", q).split()).lower()
     if not 2 <= len(key) <= 30:
         raise social.err(422, "bad_query", "q must be 2 to 30 characters")
     # A range query on the lowercase name: nothing the client sends is ever interpreted as a pattern.
@@ -279,7 +279,7 @@ async def feed(
 async def run_history(
     limit: int | None = None,
     cursor: str | None = None,
-    status: Literal["processing", "accepted", "pending_review", "rejected"] | None = None,
+    status: str | None = None,
     user: dict = Depends(social.reader),
     res: Resources = Depends(auth.get_res),
 ) -> RunPage:
@@ -287,6 +287,8 @@ async def run_history(
     me = user["_id"]
     n = social.parse_limit(limit)
     c = social.decode_cursor(cursor, 2)
+    if status is not None and status not in RUN_STATUSES:
+        raise social.err(422, "bad_status", "status must be one of " + ", ".join(RUN_STATUSES))
     q: dict = {"user_id": me, **_before(c, "started_at")}
     if status:
         q["status"] = status
@@ -335,9 +337,13 @@ async def give_kudos(run_id: UUID, user: dict = Depends(auth.current_user), res:
 async def remove_kudos(run_id: UUID, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)):
     me, rid = user["_id"], str(run_id)
     await social.limited(res, "kudos", me, res.settings.social_kudos_rate, 3600)
-    await social.visible_run(res, me, rid)
+    # the giver can always take their own kudos back, even after an unfollow, a block or a moderator hiding the run
+    if await res.db.kudos.find_one({"_id": f"{rid}:{me}"}, {"_id": 1}) is None:
+        await social.visible_run(res, me, rid)  # nothing to remove: the usual 404 when the run is not visible
     await res.db.kudos.delete_one({"_id": f"{rid}:{me}"})
     await res.db.notifications.delete_one({"_id": f"kudos:{rid}:{me}"})
+    if not await social.can_view_run(res, me, await res.db.runs.find_one({"_id": rid})):
+        return KudosState(kudos_by_me=False, kudos_count=0)  # no count of a run the caller can no longer see
     return await _kudos_state(res, me, rid)
 
 
@@ -432,8 +438,13 @@ async def delete_comment(
     run_id: UUID, comment_id: str, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
 ) -> Response:
     me, rid = user["_id"], str(run_id)
-    run = await social.visible_run(res, me, rid)
     doc = await res.db.comments.find_one({"_id": comment_id, "run_id": rid})
+    if doc is not None and doc["author_id"] == me:
+        # authors can always remove their own comment, even after losing access to the run
+        await res.db.comments.delete_one({"_id": comment_id})
+        await res.db.notifications.delete_one({"_id": f"comment:{comment_id}"})
+        return Response(status_code=204)
+    run = await social.visible_run(res, me, rid)
     if doc is not None:
         if me not in (doc["author_id"], run["user_id"]):
             raise social.err(403, "forbidden", "Only the author or the owner of the run can delete a comment")
@@ -559,10 +570,21 @@ async def _dead_actors(res: Resources, q: dict) -> set[str]:
     return actors - set(await social.live_users(res, actors))
 
 
+def _not_blocked(excluded: set[str], dead: frozenset[str] | set[str] = frozenset()) -> dict:
+    """Filter dropping notifications from blocked or gone actors. `cells_taken` is exempt from the block part: whether
+    its taker is named is decided by name_ok, so a block never reveals who the hidden taker was."""
+    return {
+        "$or": [
+            {"type": "cells_taken", "actor_id": {"$nin": sorted(dead)}},
+            {"actor_id": {"$nin": sorted(excluded | dead)}},
+        ]
+    }
+
+
 async def _unread(res: Resources, me: str, now: int, excluded: set[str]) -> int:
     base = {"user_id": me, "read": False, "visible_at": {"$lte": now}}
     dead = await _dead_actors(res, base)
-    return await res.db.notifications.count_documents({**base, "actor_id": {"$nin": sorted(excluded | dead)}})
+    return await res.db.notifications.count_documents({**base, **_not_blocked(excluded, dead)})
 
 
 async def _notification_items(res: Resources, me: str, rows: list[dict]) -> list[Notification]:
@@ -606,9 +628,14 @@ async def notifications(
     n = social.parse_limit(limit)
     c = social.decode_cursor(cursor, 2)
     excluded = await block_ids(res, me)
-    q: dict = {"user_id": me, "visible_at": {"$lte": now}, "actor_id": {"$nin": sorted(excluded)}}
+    q: dict = {"user_id": me, "visible_at": {"$lte": now}, **_not_blocked(excluded)}
     if c:
-        q["$or"] = [{"visible_at": {"$lt": c[0]}}, {"visible_at": c[0], "_id": {"$lt": c[1]}}]
+        q = {
+            "$and": [
+                q,
+                {"$or": [{"visible_at": {"$lt": c[0]}}, {"visible_at": c[0], "_id": {"$lt": c[1]}}]},
+            ]
+        }
     rows = [r async for r in res.db.notifications.find(q).sort([("visible_at", -1), ("_id", -1)]).limit(n + 1)]
     more = len(rows) > n
     rows = rows[:n]
@@ -716,12 +743,21 @@ async def report(
     return {"status": "recorded"}
 
 
+async def _i_blocked(res: Resources, me: str, other: str) -> bool:
+    return await res.db.blocks.find_one({"_id": f"{me}:{other}"}, {"_id": 1}) is not None
+
+
 async def _report_target(res: Resources, me: str, kind: str, target_id: str) -> tuple[str, object]:
     """(owner user id, snapshot) of a reportable target, or 404 / 422."""
     if kind == "user":
         if target_id == me:
             raise social.err(422, "self", "You cannot report yourself")
-        target = await social.visible_user(res, me, target_id)
+        if await _i_blocked(res, me, target_id):
+            target = await res.db.users.find_one({"_id": target_id})  # blocking must not end the right to report
+            if not social.live_user(target):
+                raise social.not_found()
+        else:
+            target = await social.visible_user(res, me, target_id)
         return target["_id"], target["name"]
     if kind == "comment":
         comment = await res.db.comments.find_one({"_id": target_id})
@@ -731,10 +767,11 @@ async def _report_target(res: Resources, me: str, kind: str, target_id: str) -> 
             raise social.err(422, "self", "You cannot report your own comment")
         run = await res.db.runs.find_one({"_id": comment["run_id"]})
         author = await res.db.users.find_one({"_id": comment["author_id"]})
-        if not await social.can_view_run(res, me, run) or not social.live_user(author):
+        if not social.live_user(author):
             raise social.not_found()
-        if await social.blocked(res, me, comment["author_id"]):
-            raise social.not_found()
+        if not await _i_blocked(res, me, comment["author_id"]):  # a blocker keeps the right to report
+            if not await social.can_view_run(res, me, run) or await social.blocked(res, me, comment["author_id"]):
+                raise social.not_found()
         return comment["author_id"], comment["text"]
     run = await res.db.runs.find_one({"_id": target_id})
     if run is None:

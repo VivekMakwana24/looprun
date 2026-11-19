@@ -208,12 +208,12 @@ def test_kudos_and_comment_counts_exclude_blocked_hidden_and_gone_authors(client
                                  "text": "hi", "created_at": i, "hidden": False})  # fmt: skip
     block(client, a, e)  # alice blocked eve: eve's kudos and comment vanish for alice
     upd(client, "comments", {"_id": "cm0"}, {"$set": {"hidden": True}})  # dora's comment: hidden by moderation
-    upd(client, "users", {"_id": uid(f)}, {"$set": {"deleting": True}})  # finn: gone (comment only)
+    upd(client, "users", {"_id": uid(f)}, {"$set": {"deleting": True}})  # finn: gone (comment and kudos)
     card = feed(client, a).json()["items"][0]
-    assert card["kudos_count"] == 3 and card["kudos_by_me"] is True  # dora, finn, alice
+    assert card["kudos_count"] == 2 and card["kudos_by_me"] is True  # dora, alice (finn is being deleted)
     assert card["comment_count"] == 1  # only alice's own
     other = feed(client, b).json()["items"][0]
-    assert other["kudos_count"] == 4 and other["kudos_by_me"] is False and other["comment_count"] == 2
+    assert other["kudos_count"] == 3 and other["kudos_by_me"] is False and other["comment_count"] == 2
 
 
 # ---------------------------------------------------------------- paging and cost

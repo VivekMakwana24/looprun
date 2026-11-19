@@ -1,6 +1,6 @@
 # Looprun Privacy Policy
 
-> **DRAFT. NOT LEGAL ADVICE. NOT YET REVIEWED.** Everything marked **[PROPOSAL]** is a choice the operator must confirm. Before launch, have a lawyer or your national data protection authority's guidance review this text (operators in Germany: also the Impressum duty under section 5 DDG). The text describes what the app and server do as of 2026-11-03; re-check it against the shipped build before publishing. Delete this box when done. Placeholders are listed in `README.md`.
+> **DRAFT. NOT LEGAL ADVICE. NOT YET REVIEWED.** Everything marked **[PROPOSAL]** is a choice the operator must confirm. Before launch, have a lawyer or your national data protection authority's guidance review this text (operators in Germany: also the Impressum duty under section 5 DDG). The text describes what the app and server do as of 2026-11-19 (social features of Phase 1a included); re-check it against the shipped build before publishing. Delete this box when done. Placeholders are listed in `README.md`.
 
 Last updated: [POLICY_DATE]
 
@@ -30,7 +30,14 @@ The app never reads your location in the background when no run is active, and i
 | **Your Google email address** | **No.** It is part of the Google sign-in token our server checks, but we do not store it. | Sign-in |
 | **The map area you are viewing** (a bounding box, not your position) | Sent with each request to load cells, and with the live-update connection (see below); it is not stored as a history, but may appear in server access logs | Show claimed cells |
 | **Live map updates** | While the map is open, the app keeps a WebSocket connection to our server. It carries the map area you are viewing (a bounding box, in the connection address) and, in the first message, your sign-in token. The server sends back which cells changed. Nothing from it is stored beyond ordinary access logs. | Keep the map current |
-| **Reports you send** (Report a cell, or Report a problem with a run) | Yes. The report holds your **free-text reason (up to 500 characters, whatever you type)**, the id of the run or cell you report, and your account. It is deleted automatically after 180 days, or earlier if you delete your account. | Abuse review |
+| **Reports you send** (Report a cell, a run, a run summary, a comment or a player) | Yes. The report holds your **free-text reason (up to 500 characters, whatever you type)**, the id of what you report, your account and, for a comment, a player or a run summary, a copy of the reported text, name or summary as you saw it. It is deleted automatically after 180 days, or earlier if you delete your account. | Abuse review |
+| **Follows** (who follows whom, and when) | Yes | Show a feed of the runs of players you follow; follower counts |
+| **Kudos** (who gave kudos to which run) | Yes | Show kudos on a run and tell the runner |
+| **Comments** (text of up to 500 characters, author, run, time) | Yes | Let followers comment on a run |
+| **Blocks** (who you blocked) | Yes | Keep a blocked player out of your feed, comments and search |
+| **Battle history** (which cells changed hands between which players, and when) | Yes, **90 days** | Show your battles, rivals and "take back" cells |
+| **Notifications** (new follower, kudos, comment, cells taken from you) | Yes, **60 days** | Show your inbox in the app (there are no push notifications) |
+| **A display name you can change in the app** (2 to 30 characters, checked against a word list) | Yes | Shown to other players, see below |
 
 **Please do not put personal details (your own or anyone else's) in a report.** We do not collect your contacts, photos, microphone or camera, and we do not use advertising identifiers. The app does not yet send crash reports or analytics.
 
@@ -49,17 +56,27 @@ We do not sell your data, show ads or share your data with advertisers.
 
 ## What other players can see
 
-- Your **display name** appears on the weekly leaderboard and, on the map, as the owner of cells you hold. A cell shows its owner's name only if enough different players are active nearby (currently at least 3); otherwise the owner is hidden.
+- Your **display name** is visible to every signed-in player in search, on your profile, on the map (as the owner of cells you hold) and on the weekly leaderboard. The app has no profile photos.
+- Your **follower and following counts** are public; the lists themselves are visible only to you.
+- **Followers see a summary of each accepted run**: start time, distance, moving time, pace, cells claimed and taken, and the names of the players you took cells from when those names are not hidden. They see it only **30 minutes** after the run is processed. They never see the route, the start point or the end point.
+- **Comments and kudos** are visible to anyone who can see that run.
+- A player you **block** no longer sees you in the feed, comments, search or on your profile, and cannot follow you, but a blocked player still appears as a map owner and on the leaderboard.
+- On the map, a cell shows its owner's name only if enough different players are active nearby (currently at least 3); otherwise the owner is hidden. The same rule decides whether your name is shown as the player who took a cell from someone.
 - Cells inside any of your home zones never show you as the owner.
 - **Delayed publishing:** when you take a cell, other players see the change after 30 minutes (you see it at once). The weekly leaderboard counts only ownership that has already been published, so it lags in the same way (your own entry is shown to you live).
 - Runs held for review (for example flagged as too fast, or with an implausible loop) claim no cells until they are reviewed.
 - Other players cannot see your route, GPS points or run times.
 
+## Moderation and reporting
+
+Players can report other players, comments and run summaries in the app. The operator reads the reason and the copy we keep, and may hide a comment or a run, or replace a display name with "Runner-xxxx" (a hidden name stays hidden when you rename yourself, until we lift it). We aim to act on a report within **24 hours**. To contact us or to appeal a decision write to [CONTACT_EMAIL]. The community rules are in the Terms ([TERMS_URL]): no harassment, hate, sexual content, or personal data in names or comments.
+
 ## Legal basis (GDPR) **[PROPOSAL, lawyer to confirm]**
 
 - Running the game, your account and your runs: performing the contract (Art. 6(1)(b)).
 - Precise location: you start a run yourself and grant the Android permission after seeing our in-app notice; we treat this as consent (Art. 6(1)(a)), which you can withdraw by stopping, revoking the permission or deleting your account.
-- Anti-cheat and abuse review: legitimate interest in a fair game (Art. 6(1)(f)).
+- Social features (follows, kudos, comments, feed, battles, notifications, display name changes): performing the contract (Art. 6(1)(b)).
+- Anti-cheat, reports and moderation: legitimate interest in a fair game and a safe community (Art. 6(1)(f)).
 
 ## How long we keep data
 
@@ -69,12 +86,15 @@ What the server does today:
 - Raw GPS points of runs held for review, rejected, or that failed processing: deleted automatically **30 days** after upload (a database expiry index; the database checks about once a minute, so deletion is not to the second).
 - Run results, loop outlines, cell power and ownership: until you delete your account.
 - Home zones: until you change them or delete your account.
-- Reports: deleted automatically **180 days** after they were filed, or earlier when the person who filed them deletes their account. Reports filed *about* you by others are not removed when you delete your account; they expire after the 180 days.
+- Battle history (cells that changed hands): **90 days**. Notifications: **60 days**. Both are deleted automatically.
+- Follows, kudos, comments and blocks: until you delete your account.
+- Reports, including the copy of a reported comment, name or run summary: deleted automatically **180 days** after they were filed, or earlier when the person who filed them deletes their account. Reports filed *about* you by others are not removed when you delete your account; they expire after the 180 days.
+- The moderation log (which moderator action was taken on what): **365 days**.
 - Server backups: kept 14 days, so deleted or expired data can remain in a backup for up to that long.
 
 ## Deleting your account
 
-In the app: Profile > Delete account. Deletion runs in two steps so that it can be resumed if something interrupts it: first your account is marked as being deleted (it can no longer upload runs or use the app, and open live connections are closed), then your cell power, runs, raw GPS, run processing records, the reports you filed and finally the account record itself are removed. If a step is interrupted you can simply repeat the request and it finishes. Your home zones are part of the account record and go with it. Cells you owned are **handed to the strongest remaining player in that cell**, or become free if nobody else has any power there; your name is removed from them. Backups are overwritten within 14 days.
+In the app: Profile > Delete account. Deletion runs in two steps so that it can be resumed if something interrupts it: first your account is marked as being deleted (it can no longer upload runs or use the app, and open live connections are closed), then your cell power, runs, raw GPS, run processing records, the reports you filed, your follows, kudos, comments (and other people's comments on your runs), notifications, blocks, the cells you took from others and finally the account record itself are removed. Cells other players lost to you stay counted for them, without your name. If a step is interrupted you can simply repeat the request and it finishes. Your home zones are part of the account record and go with it. Cells you owned are **handed to the strongest remaining player in that cell**, or become free if nobody else has any power there; your name is removed from them. Backups are overwritten within 14 days.
 
 **Without the app (web request).** Instructions and a deletion request page are at [ACCOUNT_DELETION_URL] **[to do: this page does not exist yet; see `README.md`]**. Our server does not store your email address, only your Google account ID and display name, so we cannot find an account from an email address, and we will not delete an account on an unverified email request, because anyone could ask for someone else's account to be deleted. The page therefore has you prove you own the account by signing in with Google. If you no longer have the app, install it again, sign in with the same Google account and use Profile > Delete account. If none of that works, write to [CONTACT_EMAIL]; we will explain what we can do, but we cannot delete an account we cannot verify as yours.
 

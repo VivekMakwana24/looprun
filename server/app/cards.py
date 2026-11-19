@@ -28,8 +28,11 @@ def pace(distance_m: float | None, moving_seconds: int | None) -> float | None:
 
 
 async def count_kudos(res: Resources, run_ids: list[str], excluded: set[str]) -> dict[str, int]:
+    # givers who are being deleted no longer count (comments are filtered the same way)
+    givers = set(await res.db.kudos.distinct("user_id", {"run_id": {"$in": run_ids}})) - excluded
+    gone = {u["_id"] async for u in res.db.users.find({"_id": {"$in": sorted(givers)}, "deleting": True}, {"_id": 1})}
     pipe = [
-        {"$match": {"run_id": {"$in": run_ids}, "user_id": {"$nin": sorted(excluded)}}},
+        {"$match": {"run_id": {"$in": run_ids}, "user_id": {"$nin": sorted(excluded | gone)}}},
         {"$group": {"_id": "$run_id", "n": {"$sum": 1}}},
     ]
     return {d["_id"]: d["n"] async for d in res.db.kudos.aggregate(pipe)}

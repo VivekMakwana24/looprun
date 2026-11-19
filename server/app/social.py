@@ -218,7 +218,9 @@ async def apply_block(res: Resources, a: str, b: str) -> bool:
         {"$or": [{"follower_id": a, "followee_id": b}, {"follower_id": b, "followee_id": a}]}
     )
     await res.db.kudos.delete_many({"$or": [{"user_id": a, "run_owner_id": b}, {"user_id": b, "run_owner_id": a}]})
+    # cells_taken rows stay: their actor is never shown unless name_ok, so a block must not change what the
+    # victim sees (deleting them would tell the victim whether the blocked runner was the hidden taker)
     await res.db.notifications.delete_many(
-        {"$or": [{"user_id": a, "actor_id": b}, {"user_id": b, "actor_id": a}]}
+        {"type": {"$ne": "cells_taken"}, "$or": [{"user_id": a, "actor_id": b}, {"user_id": b, "actor_id": a}]}
     )
     return r.upserted_id is not None

@@ -173,7 +173,7 @@ def test_google_names_are_screened_at_first_sign_in(make_app):
 
 
 # ---------------------------------------------------------------- hidden names
-def test_a_hidden_name_is_runner_xxxx_everywhere_others_look_and_rename_clears_it(make_app):
+def test_a_hidden_name_is_runner_xxxx_everywhere_others_look_and_rename_does_not_clear_it(make_app):
     c = make_app(**K1, social_rename_rate=100)
     a, b = login(c, "alice"), login(c, "bob")
     run_loop(c, a)
@@ -194,9 +194,10 @@ def test_a_hidden_name_is_runner_xxxx_everywhere_others_look_and_rename_clears_i
         c.portal.call(events.publish_changes, res_of(c).redis, [{"cell": cell, "new_owner": uid(a), "reveal_at": 0}])
         msg = ws.receive_json()
     assert msg["owner"] == {"id": uid(a), "name": alias}
-    # rename clears the hide
+    # a rename does not undo the hide (review F3); only the moderator lifts it
     assert patch(c, a, "/me", {"display_name": "Alice B"}).status_code == 200
-    assert find(c, "users", {"_id": uid(a)})[0]["name_hidden"] is False
+    assert find(c, "users", {"_id": uid(a)})[0]["name_hidden"] is True
+    upd(c, "users", {"_id": uid(a)}, {"$set": {"name_hidden": False}})
     assert {x["owner"]["name"] for x in cells_of(c, b) if x["owner"]} == {"Alice B"}
 
 

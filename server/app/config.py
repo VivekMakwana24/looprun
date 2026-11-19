@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     reports_retention_days: int = Field(180, ge=1)
 
     # --- social (Phase 1a, docs/PHASE1_SPEC.md 0.3 and 0.5) ---
+    notification_id_secret: str = Field("", validation_alias=AliasChoices("LOOPRUN_NOTIFICATION_ID_SECRET"))
     social_follow_rate: int = Field(100, ge=1)  # follow + unfollow per hour
     social_kudos_rate: int = Field(120, ge=1)  # kudos give + remove per hour
     social_comment_rate: int = Field(30, ge=1)  # comments per hour

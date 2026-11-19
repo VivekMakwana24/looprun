@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -32,10 +33,14 @@ async def notify(
     return r.upserted_id is not None
 
 
-def cells_taken_id(run_id: str, victim_id: str) -> str:
-    """Deterministic id of the 'cells taken' notification of one run for one victim. The run id is hashed: the id
-    is sent to the victim, who must never learn the taker's run id."""
-    return f"cells_taken:{hashlib.sha256(run_id.encode()).hexdigest()[:32]}:{victim_id}"
+def cells_taken_id(res: Resources, run_id: str, victim_id: str) -> str:
+    """Deterministic id of the 'cells taken' notification of one run for one victim. The id is sent to the victim,
+    who can read run ids of the runners they follow, so it is an HMAC keyed with a server secret
+    (`notification_id_secret`, else the JWT secret): nobody can derive it from, or link it to, a run id."""
+    s = res.settings
+    key = (s.notification_id_secret or s.jwt_secret).encode()
+    mac = hmac.new(key, f"cells_taken\0{run_id}\0{victim_id}".encode(), hashlib.sha256).hexdigest()[:32]
+    return f"cells_taken:{mac}"
 
 
 async def notify_cells_taken(res: Resources, run_id: str, taker_id: str) -> int:
@@ -49,6 +54,6 @@ async def notify_cells_taken(res: Resources, run_id: str, taker_id: str) -> int:
             first_at[ev["victim_id"]] = min(ev["at"], first_at.get(ev["victim_id"], ev["at"]))
     for victim, at in first_at.items():
         await notify(
-            res, cells_taken_id(run_id, victim), victim, "cells_taken", taker_id, at + delay, run_id=run_id
+            res, cells_taken_id(res, run_id, victim), victim, "cells_taken", taker_id, at + delay, run_id=run_id
         )
     return len(first_at)

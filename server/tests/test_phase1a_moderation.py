@@ -182,7 +182,8 @@ def test_report_of_something_the_reporter_cannot_see_is_404_and_stores_nothing(m
                         "text": "x", "created_at": 1, "hidden": False})  # fmt: skip
     gone = login(c, "gina")
     upd(c, "users", {"_id": uid(gone)}, {"$set": {"deleting": True}})
-    ins(c, "blocks", {"_id": f"{uid(a)}:{uid(d)}", "blocker_id": uid(a), "blocked_id": uid(d), "at": 1})
+    # dora blocked alice: alice cannot report her (only a blocker keeps the right to report, see review F2)
+    ins(c, "blocks", {"_id": f"{uid(d)}:{uid(a)}", "blocker_id": uid(d), "blocked_id": uid(a), "at": 1})
     cases = [
         ("run_card", fresh), ("run_card", held), ("run_card", stranger), ("run_card", str(uuid.uuid4())),
         ("comment", hidden), ("comment", "elsewhere"), ("comment", "nope"), ("user", uid(gone)), ("user", "f" * 32),

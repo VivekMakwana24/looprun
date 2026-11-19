@@ -237,7 +237,7 @@ paths:
       summary: Rename the caller (display name)
       description: >
         Length 2..30 after trimming and collapsing inner whitespace; no control characters; must pass the profanity
-        hook. Renaming clears a moderation hide of the old name. Allowed 5 times per 24 hours.
+        hook. A moderator hide of the name stays after a rename. Allowed 5 times per 24 hours.
       requestBody:
         required: true
         content:

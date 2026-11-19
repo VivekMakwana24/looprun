@@ -79,7 +79,7 @@ def test_cells_taken_is_one_notification_per_run_and_victim_and_survives_reproce
     assert (item["cells"], item["cells_unattributed"], item["run_id"]) == (n, 0, None)
     run_b = find(c, "runs", {"user_id": uid(b)})[0]["_id"]
     assert run_b not in json.dumps(inbox(c, a))  # the taker's run id is never sent (not even inside the id)
-    assert item["id"] == cells_taken_id(run_b, uid(a))
+    assert item["id"] == cells_taken_id(res_of(c), run_b, uid(a))
     assert put(c, a, "/me/home-zones", json={"zones": []}).status_code == 204
     c.post("/v1/notifications/read", json={"ids": [item["id"]]}, headers={"Authorization": a["Authorization"]})
     asyncio.run(notify_cells_taken(res_of(c), run_b, uid(b)))  # a redelivery

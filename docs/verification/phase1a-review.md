@@ -97,3 +97,15 @@ Not ready to release. B1 and B2 are fixable in a small change and each needs one
 - **Follow-up 8 (run from a notification):** run detail looks the run up in the first 3 history pages (`FeedRepository.ownCard`) and shows the run header with its numbers when found; no error when not found. It only helps for own runs, which is what kudos and comment notifications are about. A single-card route in the contract would still be cleaner.
 - **Follow-up 10:** `ApiService.markRead` sends nothing for an empty id list.
 - **Tests added:** history screen (statuses, empty, offline and retry, load more, open run), block text, report from BLOCKED, run detail from a notification, `ownCard`. The BOARD hub already had widget tests (three parts, lazy loading, 48 dp tabs) from the first push.
+
+## Fixes (server, 2026-11-19)
+
+Tests are in `server/tests/test_phase1a_review_fixes.py`; each fails on the code before the fix. Full suite: 362 passed, 10 skipped.
+
+- **B1 fixed.** `cells_taken_id` is an HMAC of run id and victim, keyed with `notification_id_secret` (env `LOOPRUN_NOTIFICATION_ID_SECRET`, else the JWT secret). Tests: no feed card id hashes to the notification id, ids differ between secrets, victims and runs. Set the secret in production if the JWT secret is ever rotated, otherwise ids of rows written before the rotation no longer match and a redelivery could write a second row (rare, the rows expire after 60 days).
+- **B2 fixed.** `apply_block` leaves `cells_taken` rows alone and the list and unread count no longer filter them by actor. Test: blocking the hidden taker leaves the body and unread count of `GET /notifications` byte-identical; blocking a named taker keeps the row and shows it unattributed.
+- **B3 done.** `privacy-policy.md`, `data-safety-answers.md` (including the UGC declarations), `tester-guide.md` and `closed-test-checklist.md` updated as listed. The disclosure strings (`location-disclosure.md`) are untouched. New placeholder `[TERMS_URL]` (README). Wording is still a proposal for the lawyer and the Console.
+- **F1 fixed** (comment and kudos self-delete after losing access), **F2 fixed** (a blocker can report the user and their comments), **F3 fixed** (rename keeps a moderator hide; contract text and spec log updated), **F4 fixed** (`bad_status` 422), **F5 fixed** (kudos of users being deleted are not counted), **F6 fixed** (`_apply` writes the battle row only when the guarded `cells` write took effect), **F7 fixed** (search query is NFC-normalised).
+- **F11:** no new notification type was added, so nothing to change; the rule stays in the spec log.
+- F8, F9, F10 are done by the mobile agent (section above).
+

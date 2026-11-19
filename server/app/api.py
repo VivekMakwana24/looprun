@@ -300,14 +300,14 @@ def clean_display_name(raw: str) -> str | None:
 async def rename_me(
     body: RenameRequest, user: dict = Depends(auth.current_user), res: Resources = Depends(auth.get_res)
 ) -> RenameResponse:
-    """Change the display name (2..30 characters). Clears a moderation hide of the old name."""
+    """Change the display name (2..30 characters). A moderator hide of the name stays until `unhide-name`."""
     s = res.settings
     await social.limited(res, "rename", user["_id"], s.social_rename_rate, 86_400)
     name = clean_display_name(body.display_name)
     if name is None or not profanity.is_allowed(name, s.profanity_list_path):
         raise social.err(422, "name_rejected", "This name cannot be used")  # same message whatever the rule
     await res.db.users.update_one(
-        {"_id": user["_id"]}, {"$set": {"name": name, "name_lower": social.name_key(name), "name_hidden": False}}
+        {"_id": user["_id"]}, {"$set": {"name": name, "name_lower": social.name_key(name)}}
     )
     return RenameResponse(user=UserRef(id=user["_id"], name=name))
 

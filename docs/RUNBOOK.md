@@ -85,7 +85,7 @@ docker compose exec api python -m app.moderation hide-comment <id>  # also: hide
 docker compose exec api python -m app.moderation unhide-comment <id>  # also unhide-name, unhide-run
 docker compose exec api python -m app.moderation dismiss <report_id>
 ```
-`hide-*` resolve the open reports on that target; `dismiss <report_id>` closes one report without action (`reports --state all --kind comment --limit N` filters the list). Every action is written to
+`hide-*` resolve the open reports on that target (a hidden name stays hidden when the player renames, until `unhide-name`); `dismiss <report_id>` closes one report without action (`reports --state all --kind comment --limit N` filters the list). Every action is written to
 `moderation_log` (OS user, action, target, report ids; deleted after `LOOPRUN_MODERATION_LOG_RETENTION_DAYS`).
 Set `LOOPRUN_ADMIN_ENABLED=false` to make the CLI refuse (exit 2). After upgrading an existing database run once:
 `docker compose exec api python -m app.backfill_social`.

@@ -298,13 +298,15 @@ async def _apply(db: Any, user_id: str, o: dict) -> None:
     if o["changed"]:
         fields = o["fields"]
         r = await db.cells.update_one({"_id": cell, "changed_at": {"$lte": fields["changed_at"]}}, {"$set": fields})
-        if r.matched_count == 0:
+        written = r.matched_count > 0
+        if not written:
             try:
                 await db.cells.insert_one({"_id": cell, "lat": o["lat"], "lng": o["lng"], **fields})
+                written = True
             except DuplicateKeyError:
-                pass
+                pass  # a newer plan already holds the cell: this flip never happened, so no battle row either
         event = o.get("event")
-        if event:
+        if event and written:
             # One durable row per flip from another user (the source of battles and rivals), keyed by run and
             # cell and planned with the claim, so a redelivered run writes it exactly once.
             doc = dict(event)
